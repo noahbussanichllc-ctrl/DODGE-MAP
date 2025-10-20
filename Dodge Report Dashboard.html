@@ -86,45 +86,45 @@
         <div class="w-1/4 overflow-y-auto border-l p-4" x-show="selectedItem">
             <div class="mb-4">
                 <label class="block font-bold">Project Title</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" @input.debounce.500ms="autoSave(selectedItem)">
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" @input.debounce.500ms="autoSave">
             </div>
             <div class="mb-4">
                 <label class="block font-bold">Address</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" @input.debounce.500ms="autoSave(selectedItem)">
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" @input.debounce.500ms="autoSave">
             </div>
             <div class="mb-4">
                 <label class="block font-bold">City</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" @input.debounce.500ms="autoSave(selectedItem)">
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" @input.debounce.500ms="autoSave">
             </div>
             <div class="mb-4 flex gap-4">
                 <div class="flex-1">
                     <label class="block font-bold">Property Type - Sub-type</label>
-                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" @input.debounce.500ms="autoSave(selectedItem)">
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" @input.debounce.500ms="autoSave">
                 </div>
                 <div class="flex-1">
                     <label class="block font-bold">Units</label>
-                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" @input.debounce.500ms="autoSave(selectedItem)">
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" @input.debounce.500ms="autoSave">
                 </div>
                 <div class="flex-1">
                     <label class="block font-bold">Construction - Cost ($ mm)</label>
-                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" @input.debounce.500ms="autoSave(selectedItem)">
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" @input.debounce.500ms="autoSave">
                 </div>
             </div>
             <div class="mb-4">
                 <label class="block font-bold">Construction Details</label>
-                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
+                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" @input.debounce.500ms="autoSave"></textarea>
             </div>
             <div class="mb-4">
                 <label class="block font-bold">NOTES - NOAH</label>
-                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['NOTES - NOAH']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
+                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['NOTES - NOAH']" @input.debounce.500ms="autoSave"></textarea>
             </div>
             <div class="mb-4">
                 <label class="block font-bold">Target Dates - Start</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" @input.debounce.500ms="autoSave(selectedItem)">
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" @input.debounce.500ms="autoSave">
             </div>
             <div class="mb-4">
                 <label class="block font-bold">Target Dates - Completion</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" @input.debounce.500ms="autoSave(selectedItem)">
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" @input.debounce.500ms="autoSave">
             </div>
             <button class="mt-4 py-2 px-4 bg-gray-200 rounded" @click="copyAddress(selectedItem)" aria-label="Copy full address">Copy Full Address</button>
         </div>
@@ -271,7 +271,7 @@
                     let filtered = this.data;
                     if (this.searchQuery) {
                         const q = this.searchQuery.toLowerCase();
-                        filtered = filtered.filter(item => 
+                        filtered = filtered.filter(item =>
                             (item['Project Title']?.toLowerCase().includes(q) ?? false) ||
                             (item['Primary Address']?.toLowerCase().includes(q) ?? false) ||
                             (item['City']?.toLowerCase().includes(q) ?? false) ||
@@ -440,22 +440,61 @@
                     }
                 },
 
-                async autoSave(item) {
-                    // Update local data
-                    const index = this.data.findIndex(d => d.id === item.id);
-                    if (index !== -1) {
-                        this.data[index] = { ...item };
-                        this.persistData();
-                        this.updateFiltered();
+                async autoSave() {
+                    if (!this.selectedItem || this.selectedItem.id === undefined) return;
+
+                    const dataIndex = this.data.findIndex(d => d.id === this.selectedItem.id);
+                    if (dataIndex === -1) return;
+
+                    const originalItem = this.data[dataIndex];
+                    let needsMapUpdate = false;
+
+                    // Fields that affect map marker position or color
+                    const visualFields = [
+                        'Geocodes - Latitude', 'Geocodes - Longitude', 'Property Type - Sub-type',
+                        'Target Dates - Start', 'Target Dates - Completion'
+                    ];
+
+                    // Check if any visual-related field has changed
+                    for (const field of visualFields) {
+                        if (originalItem[field] !== this.selectedItem[field]) {
+                            needsMapUpdate = true;
+                            break;
+                        }
                     }
 
-                    // Auto-save to Supabase async
+                    // Update the main data source in-place with the changes from the form
+                    Object.assign(originalItem, this.selectedItem);
+                    
+                    // Also update the item in the filtered list if it exists
+                    const filteredIndex = this.filteredData.findIndex(d => d.id === this.selectedItem.id);
+                    if (filteredIndex !== -1) {
+                         Object.assign(this.filteredData[filteredIndex], this.selectedItem);
+                    }
+
+                    // Persist changes to local storage
+                    this.persistData();
+
+                    // If a visual field changed, update the map markers
+                    if (needsMapUpdate) {
+                        originalItem.lat = parseFloat(originalItem['Geocodes - Latitude']);
+                        originalItem.lon = parseFloat(originalItem['Geocodes - Longitude']);
+                        // We must update markers based on the current filtered data
+                        this.updateMarkers();
+                    }
+
+                    // Asynchronously save the update to Supabase
                     try {
-                        const updates = { ...item };
+                        const updates = { ...this.selectedItem };
                         delete updates.lat;
                         delete updates.lon;
-                        const { error } = await this.supabase.from('dodge').update(updates).eq('id', item.id);
+
+                        const { error } = await this.supabase.from('dodge').update(updates).eq('id', this.selectedItem.id);
                         if (error) throw error;
+                        
+                        // Optional: show a temporary success message without being too disruptive
+                        console.log(`Item ${this.selectedItem.id} saved to Supabase.`);
+
                     } catch (err) {
                         this.warningMessage = 'Error auto-saving to Supabase: ' + err.message + '. Changes saved locally.';
                     }
