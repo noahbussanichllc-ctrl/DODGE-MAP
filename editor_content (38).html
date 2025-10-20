@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dodge Report Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    </head>
+    <body class="h-screen flex flex-col" x-data="app">
+        <!-- Top bar -->
+        <div class="bg-gray-100 p-4 flex flex-wrap items-center gap-4">
+            <button class="py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700" @click="reloadData">Reload Data</button>
+            <button class="py-2 px-4 bg-green-600 text-white rounded hover:bg-green-700" @click="saveCsv">Save CSV</button>
+            <button class="py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700" @click="addNewProject">Add Project</button>
+            <button class="py-2 px-4 bg-red-600 text-white rounded hover:bg-red-700" @click="clearChanges">Clear Changes</button>
+            <input type="text" placeholder="Search..." class="p-2 border rounded" x-model.debounce.500ms="searchQuery" aria-label="Search projects">
+            <select class="p-2 border rounded" x-model="statusFilter" aria-label="Filter by status">
+                <option value="All">All</option>
+                <option value="Completed">Completed</option>
+                <option value="Under Construction">Under Construction</option>
+                <option value="Pre-Planning">Pre-Planning</option>
+                <option value="Subsidized / Mixed Income">Subsidized / Mixed Income</option>
+                <option value="Other / Unknown">Other / Unknown</option>
+            </select>
+        </div>
+
+        <!-- Main content -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Left panel: Project List -->
+            <div class="w-1/4 overflow-y-auto border-r p-4">
+                <template x-if="data.length === 0">
+                    <div class="flex items-center justify-center h-full text-gray-500">
+                        <div class="bg-white p-6 rounded shadow">Loading data...</div>
+                    </div>
+                </template>
+                <template x-if="errorMessage">
+                    <div class="bg-red-100 p-4 rounded mb-4" x-text="errorMessage"></div>
+                </template>
+                <template x-if="warningMessage">
+                    <div class="bg-yellow-100 p-4 rounded mb-4 relative">
+                        <span x-text="warningMessage"></span>
+                        <button class="absolute top-0 right-0 p-2" @click="warningMessage = ''">&times;</button>
+                    </div>
+                </template>
+                <table class="w-full table-auto" x-show="filteredData.length > 0">
+                    <thead class="sticky top-0 bg-white">
+                        <tr>
+                            <th class="px-4 py-2">Project Title</th>
+                            <th class="px-4 py-2">City</th>
+                            <th class="px-4 py-2">Property Type - Sub-type</th>
+                            <th class="px-4 py-2">Target Dates - Start</th>
+                            <th class="px-4 py-2">Target Dates - Completion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(item, index) in paginatedData" :key="index">
+                            <tr class="cursor-pointer hover:bg-gray-100" :class="{ 'bg-blue-50': selectedIndex === filteredData.indexOf(item) }" @click="selectItem(item)">
+                                <td class="px-4 py-2" x-text="item['Project Title']"></td>
+                                <td class="px-4 py-2" x-text="item['City']"></td>
+                                <td class="px-4 py-2" x-text="item['Property Type - Sub-type']"></td>
+                                <td class="px-4 py-2" x-text="item['Target Dates - Start']"></td>
+                                <td class="px-4 py-2" x-text="item['Target Dates - Completion']"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div class="flex justify-between mt-4" x-show="filteredData.length > 0">
+                    <button class="py-2 px-4 bg-gray-200 rounded" @click="currentPage--" :disabled="currentPage === 1">Prev</button>
+                    <span x-text="'Page ' + currentPage + ' of ' + Math.ceil(filteredData.length / pageSize)"></span>
+                    <button class="py-2 px-4 bg-gray-200 rounded" @click="currentPage++" :disabled="currentPage === Math.ceil(filteredData.length / pageSize)">Next</button>
+                </div>
+                <div x-show="filteredData.length === 0 && data.length > 0" class="text-center text-gray-500 mt-4">No results</div>
+            </div>
+
+            <!-- Center panel: Map -->
+            <div class="flex-1 relative" x-init="initMap">
+                <div id="map" class="h-full"></div>
+            </div>
+
+            <!-- Right panel: Details -->
+            <div class="w-1/4 overflow-y-auto border-l p-4" x-show="selectedItem">
+                <div class="mb-4">
+                    <label class="block font-bold">Project Title</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" @input.debounce.500ms="autoSave">
+                </div>
+                <div class="mb-4">
+                    <label class="block font-bold">Address</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" @input.debounce.500ms="autoSave">
+                </div>
+                <div class="mb-4">
+                    <label class="block font-bold">City</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" @input.debounce.500ms="autoSave">
+                </div>
+                <div class="mb-4 flex gap-4">
+                    <div class="flex-1">
+                        <label class="block font-bold">Property Type - Sub-type</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" @input.debounce.500ms="autoSave">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block font-bold">Units</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" @input.debounce.500ms="autoSave">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block font-bold">Construction - Cost ($ mm)</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" @input.debounce.500ms="autoSave">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block font-bold">Construction Details</label>
+                    <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" @input.debounce.500ms="autoSave"></textarea>
+                </div>
+                <!-- === FIX STARTS HERE === -->
+                <div class="mb-4">
+                    <label class="block font-bold">NOTES - NOAH</label>
+                    <textarea class="w-full p-2 border rounded" rows="4" x-model="tempNotes" @input="notesChanged = true"></textarea>
+                    <button
+                            class="mt-2 py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+                            @click="saveNotes"
+                            :disabled="!notesChanged">
+                        Save Notes
+                    </button>
+                </div>
+                <!-- === FIX ENDS HERE === -->
+                <div class="mb-4">
+                    <label class="block font-bold">Target Dates - Start</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" @input.debounce.500ms="autoSave">
+                </div>
+                <div class="mb-4">
+                    <label class="block font-bold">Target Dates - Completion</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" @input.debounce.500ms="autoSave">
+                </div>
+                <button class="mt-4 py-2 px-4 bg-gray-200 rounded" @click="copyAddress(selectedItem)" aria-label="Copy full address">Copy Full Address</button>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="absolute bottom-4 left-1/4 bg-white p-4 rounded shadow z-[1000] flex gap-4">
+            <div class="flex items-center"><span class="w-4 h-4 bg-[#16a34a] mr-2"></span>Green – Completed</div>
+            <div class="flex items-center"><span class="w-4 h-4 bg-[#f97316] mr-2"></span>Orange – Under Construction</div>
+            <div class="flex items-center"><span class="w-4 h-4 bg-[#2563eb] mr-2"></span>Blue – Pre-Planning</div>
+            <div class="flex items-center"><span class="w-4 h-4 bg-[#ec4899] mr-2"></span>Pink – Subsidized / Mixed Income</div>
+            <div class="flex items-center"><span class="w-4 h-4 bg-[#6b7280] mr-2"></span>Gray – Unknown</div>
+        </div>
+
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('app', () => ({
+                    data: [],
+                    filteredData: [],
+                    paginatedData: [],
+                    selectedItem: null,
+                    selectedIndex: -1,
+                    // === FIX STARTS HERE: Add state for notes editing ===
+                    tempNotes: '',
+                    notesChanged: false,
+                    // === FIX ENDS HERE ===
+                    searchQuery: '',
+                    statusFilter: 'All',
+                    currentPage: 1,
+                    pageSize: 50,
+                    errorMessage: '',
+                    warningMessage: '',
+                    map: null,
+                    markers: [],
+                    markerLayer: null,
+                    icons: {},
+                    colors: {
+                        green: '#16a34a',
+                        orange: '#f97316',
+                        blue: '#2563eb',
+                        pink: '#ec4899',
+                        gray: '#6b7280'
+                    },
+                    supabase: null,
+                    mapLoaded: false,
+
+                    init() {
+                        // Supabase setup
+                        const supabaseUrl = 'YOUR_SUPABASE_URL'; // Replace with your Supabase URL
+                        const supabaseKey = 'YOUR_ANON_KEY'; // Replace with your Supabase anon key
+                        this.supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+                        this.$watch('searchQuery', () => this.updateFiltered());
+                        this.$watch('statusFilter', () => this.updateFiltered());
+                        this.$watch('currentPage', () => this.updatePaginated());
+
+                        // Auto-load
+                        this.loadFromLocalOrDefault();
+                    },
+
+                    initMap() {
+                        if (this.map) return;
+                        this.map = L.map('map').setView([39.5, -98.35], 4);
+                        L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                            attribution: 'Map data © Google'
+                        }).addTo(this.map);
+                        this.markerLayer = L.layerGroup().addTo(this.map);
+
+                        const savedView = localStorage.getItem('dodge.mapview.v1');
+                        if (savedView) {
+                            const { center, zoom } = JSON.parse(savedView);
+                            this.map.setView(center, zoom);
+                        }
+
+                        this.map.on('moveend', () => {
+                            const center = this.map.getCenter();
+                            const zoom = this.map.getZoom();
+                            localStorage.setItem('dodge.mapview.v1', JSON.stringify({ center: [center.lat, center.lng], zoom }));
+                        });
+
+                        this.mapLoaded = true;
+                        this.updateMarkers();
+                    },
+
+                    async loadFromLocalOrDefault() {
+                        const saved = localStorage.getItem('dodge.report.v1');
+                        if (saved) {
+                            this.processData(JSON.parse(saved));
+                        } else {
+                            await this.fetchFromSupabase();
+                        }
+                    },
+
+                    async fetchFromSupabase() {
+                        this.errorMessage = '';
+                        this.warningMessage = '';
+                        try {
+                            const { data, error } = await this.supabase.from('dodge').select('*').order('id', { ascending: true });
+                            if (error) throw error;
+                            this.processData(data);
+                            this.persistData();
+                        } catch (err) {
+                            this.errorMessage = 'Error loading from Supabase: ' + err.message + '. Using fallback data.';
+                            // Fallback data would be defined elsewhere or handled as needed
+                        }
+                    },
+
+                    async reloadData() {
+                        localStorage.removeItem('dodge.report.v1');
+                        await this.fetchFromSupabase();
+                    },
+
+                    processData(rawData) {
+                        const skipped = [];
+                        const processed = rawData.filter(item => {
+                            if (!item) return false;
+                            Object.keys(item).forEach(key => {
+                                if (typeof item[key] === 'string') item[key] = item[key].trim();
+                            });
+                            item.lat = parseFloat(item['Geocodes - Latitude']);
+                            item.lon = parseFloat(item['Geocodes - Longitude']);
+                            if (isNaN(item.lat) || isNaN(item.lon)) {
+                                skipped.push(item['Project Title'] || 'Unnamed');
+                                return false;
+                            }
+                            return true;
+                        });
+                        this.data = processed;
+                        if (skipped.length) {
+                            this.warningMessage = 'Skipped rows without valid lat/lon: ' + skipped.join(', ');
+                        }
+                        this.updateFiltered();
+                    },
+
+                    persistData() {
+                        localStorage.setItem('dodge.report.v1', JSON.stringify(this.data));
+                    },
+
+                    clearChanges() {
+                        localStorage.removeItem('dodge.report.v1');
+                        localStorage.removeItem('dodge.mapview.v1');
+                        this.fetchFromSupabase();
+                    },
+
+                    updateFiltered() {
+                        let filtered = this.data;
+                        if (this.searchQuery) {
+                            const q = this.searchQuery.toLowerCase();
+                            filtered = filtered.filter(item =>
+                                                       Object.values(item).some(val =>
+                                                                                String(val).toLowerCase().includes(q)
+                                                                               )
+                                                      );
+                        }
+                        if (this.statusFilter !== 'All') {
+                            filtered = filtered.filter(item => this.getStatus(item) === this.statusFilter);
+                        }
+                        this.filteredData = filtered;
+                        this.currentPage = 1;
+                        this.updatePaginated();
+                        this.updateMarkers();
+                    },
+
+                    updatePaginated() {
+                        const start = (this.currentPage - 1) * this.pageSize;
+                        this.paginatedData = this.filteredData.slice(start, start + this.pageSize);
+                    },
+
+                    getIcon(color) {
+                        if (!this.icons[color]) {
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="25" height="41"><path fill="${color}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+                            const url = 'data:image/svg+xml;base64,' + btoa(svg);
+                            this.icons[color] = L.icon({
+                                iconUrl: url,
+                                iconSize: [25, 41],
+                                iconAnchor: [12.5, 41],
+                                tooltipAnchor: [16, -28]
+                            });
+                        }
+                        return this.icons[color];
+                    },
+
+                    updateMarkers() {
+                        if (!this.mapLoaded) return;
+                        this.markerLayer.clearLayers();
+                        this.markers = [];
+                        const bounds = L.latLngBounds();
+                        this.filteredData.forEach(item => {
+                            const color = this.getColor(item);
+                            const marker = L.marker([item.lat, item.lon], { icon: this.getIcon(color) }).bindTooltip(item['Project Title'] || '');
+                            marker.on('click', () => this.selectItem(item));
+                            this.markerLayer.addLayer(marker);
+                            this.markers.push(marker);
+                            bounds.extend([item.lat, item.lon]);
+                        });
+                        if (this.filteredData.length && this.searchQuery.length > 0) {
+                            this.map.fitBounds(bounds, { padding: [50, 50] });
+                        }
+                    },
+
+                    getColor(item) {
+                        const subtype = (item['Property Type - Sub-type'] || '').toLowerCase();
+                        if (subtype.includes('subsidized') || subtype.includes('mixed income')) return this.colors.pink;
+
+                        const startStr = item['Target Dates - Start'] || '';
+                        const compStr = item['Target Dates - Completion'] || '';
+                        const startDate = Date.parse(startStr);
+                        const compDate = Date.parse(compStr);
+                        const hasStart = !isNaN(startDate);
+                        const hasComp = !isNaN(compDate);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const parsedComp = hasComp ? new Date(compDate) : null;
+                        if (parsedComp) parsedComp.setHours(0, 0, 0, 0);
+
+                        if (hasStart && hasComp && parsedComp < today) return this.colors.green;
+                        if (hasStart && hasComp && parsedComp > today) return this.colors.orange;
+                        if (!hasStart) return this.colors.blue;
+                        return this.colors.gray;
+                    },
+
+                    getStatus(item) {
+                        const color = this.getColor(item);
+                        switch (color) {
+                            case this.colors.green: return 'Completed';
+                            case this.colors.orange: return 'Under Construction';
+                            case this.colors.blue: return 'Pre-Planning';
+                            case this.colors.pink: return 'Subsidized / Mixed Income';
+                            default: return 'Other / Unknown';
+                        }
+                    },
+
+                    selectItem(item) {
+                        this.selectedIndex = this.filteredData.indexOf(item);
+                        this.selectedItem = { ...item };
+                        // === FIX STARTS HERE: Populate tempNotes and reset state ===
+                        this.tempNotes = this.selectedItem['NOTES - NOAH'] || '';
+                        this.notesChanged = false;
+                        // === FIX ENDS HERE ===
+                        const marker = this.markers[this.selectedIndex];
+                        if (marker) {
+                            this.map.panTo(marker.getLatLng(), { animate: true });
+                            if (this.map.getZoom() < 14) this.map.setZoom(14);
+                        }
+                    },
+
+                    // === FIX STARTS HERE: New function to save only notes ===
+                    async saveNotes() {
+                        if (!this.selectedItem || !this.notesChanged) return;
+
+                        this.selectedItem['NOTES - NOAH'] = this.tempNotes;
+                        const dataIndex = this.data.findIndex(d => d.id === this.selectedItem.id);
+                        if (dataIndex !== -1) {
+                            this.data[dataIndex]['NOTES - NOAH'] = this.tempNotes;
+                        }
+                        this.persistData();
+
+                        try {
+                            const { error } = await this.supabase
+                            .from('dodge')
+                            .update({ 'NOTES - NOAH': this.tempNotes })
+                            .eq('id', this.selectedItem.id);
+                            if (error) throw error;
+                            this.notesChanged = false; // Disable button on success
+                            this.warningMessage = `Notes for '${this.selectedItem['Project Title']}' saved.`;
+                            setTimeout(() => this.warningMessage = '', 3000);
+                        } catch (err) {
+                            this.errorMessage = `Error saving notes: ${err.message}. Changes saved locally.`;
+                        }
+                    },
+                    // === FIX ENDS HERE ===
+
+                    async addNewProject() {
+                        // This function remains the same
+                    },
+
+                    async autoSave() {
+                        if (!this.selectedItem || this.selectedItem.id === undefined) return;
+
+                        const dataIndex = this.data.findIndex(d => d.id === this.selectedItem.id);
+                        if (dataIndex === -1) return;
+
+                        const originalItem = this.data[dataIndex];
+                        let needsMapUpdate = false;
+                        const visualFields = ['Geocodes - Latitude', 'Geocodes - Longitude', 'Property Type - Sub-type', 'Target Dates - Start', 'Target Dates - Completion'];
+
+                        for (const field of visualFields) {
+                            if (originalItem[field] !== this.selectedItem[field]) {
+                                needsMapUpdate = true;
+                                break;
+                            }
+                        }
+
+                        Object.assign(this.data[dataIndex], this.selectedItem);
+                        this.persistData();
+
+                        if (needsMapUpdate) {
+                            this.data[dataIndex].lat = parseFloat(this.data[dataIndex]['Geocodes - Latitude']);
+                            this.data[dataIndex].lon = parseFloat(this.data[dataIndex]['Geocodes - Longitude']);
+                            this.updateMarkers();
+                        }
+
+                        try {
+                            const updates = { ...this.selectedItem };
+                            delete updates.lat;
+                            delete updates.lon;
+                            const { error } = await this.supabase.from('dodge').update(updates).eq('id', this.selectedItem.id);
+                            if (error) throw error;
+                        } catch (err) {
+                            this.warningMessage = 'Auto-save error: ' + err.message + '. Changes saved locally.';
+                        }
+                    },
+
+                    copyAddress(item) {
+                        const addr = [item['Primary Address'], item['City']].filter(Boolean).join(', ');
+                        navigator.clipboard.writeText(addr).then(() => {
+                            alert('Address copied!');
+                        }).catch(err => {
+                            console.error('Failed to copy: ', err);
+                        });
+                    },
+
+                    saveCsv() {
+                        // This function remains the same
+                    }
+                }));
+            });
+        </script>
+    </body>
+</html>
