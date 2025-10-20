@@ -60,11 +60,11 @@
                 <tbody>
                     <template x-for="(item, index) in paginatedData" :key="index">
                         <tr class="cursor-pointer hover:bg-gray-100" :class="{ 'bg-blue-50': selectedIndex === filteredData.indexOf(item) }" @click="selectItem(item)">
-                            <td class="px-4 py-2" x-text="item['Project Title'] || 'N/A'"></td>
-                            <td class="px-4 py-2" x-text="item['City'] || 'N/A'"></td>
-                            <td class="px-4 py-2" x-text="item['Property Type - Sub-type'] || 'N/A'"></td>
-                            <td class="px-4 py-2" x-text="item['Target Dates - Start'] || 'N/A'"></td>
-                            <td class="px-4 py-2" x-text="item['Target Dates - Completion'] || 'N/A'"></td>
+                            <td class="px-4 py-2" x-text="item['Project Title']"></td>
+                            <td class="px-4 py-2" x-text="item['City']"></td>
+                            <td class="px-4 py-2" x-text="item['Property Type - Sub-type']"></td>
+                            <td class="px-4 py-2" x-text="item['Target Dates - Start']"></td>
+                            <td class="px-4 py-2" x-text="item['Target Dates - Completion']"></td>
                         </tr>
                     </template>
                 </tbody>
@@ -78,57 +78,55 @@
         </div>
 
         <!-- Center panel: Map -->
-        <div class="flex-1" id="map"></div>
+        <div class="flex-1 relative" x-init="initMap">
+            <div id="map" class="h-full"></div>
+        </div>
 
         <!-- Right panel: Details -->
         <div class="w-1/4 overflow-y-auto border-l p-4" x-show="selectedItem">
-            <template x-if="selectedItem">
-                <div>
-                    <div class="mb-4">
-                        <label class="block font-bold">Project Title</label>
-                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" @input.debounce.500ms="autoSave(selectedItem)">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block font-bold">Address</label>
-                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" @input.debounce.500ms="autoSave(selectedItem)">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block font-bold">City</label>
-                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" @input.debounce.500ms="autoSave(selectedItem)">
-                    </div>
-                    <div class="mb-4 flex gap-4">
-                        <div class="flex-1">
-                            <label class="block font-bold">Property Type - Sub-type</label>
-                            <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" @input.debounce.500ms="autoSave(selectedItem)">
-                        </div>
-                        <div class="flex-1">
-                            <label class="block font-bold">Units</label>
-                            <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" @input.debounce.500ms="autoSave(selectedItem)">
-                        </div>
-                        <div class="flex-1">
-                            <label class="block font-bold">Construction - Cost ($ mm)</label>
-                            <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" @input.debounce.500ms="autoSave(selectedItem)">
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block font-bold">Construction Details</label>
-                        <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block font-bold">NOTES - NOAH</label>
-                        <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['NOTES - NOAH']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block font-bold">Target Dates - Start</label>
-                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" @input.debounce.500ms="autoSave(selectedItem)">
-                    </div>
-                    <div class="mb-4">
-                        <label class="block font-bold">Target Dates - Completion</label>
-                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" @input.debounce.500ms="autoSave(selectedItem)">
-                    </div>
-                    <button class="mt-4 py-2 px-4 bg-gray-200 rounded" @click="copyAddress(selectedItem)" aria-label="Copy full address">Copy Full Address</button>
+            <div class="mb-4">
+                <label class="block font-bold">Project Title</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" @input.debounce.500ms="autoSave(selectedItem)">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Address</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" @input.debounce.500ms="autoSave(selectedItem)">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">City</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" @input.debounce.500ms="autoSave(selectedItem)">
+            </div>
+            <div class="mb-4 flex gap-4">
+                <div class="flex-1">
+                    <label class="block font-bold">Property Type - Sub-type</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" @input.debounce.500ms="autoSave(selectedItem)">
                 </div>
-            </template>
+                <div class="flex-1">
+                    <label class="block font-bold">Units</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" @input.debounce.500ms="autoSave(selectedItem)">
+                </div>
+                <div class="flex-1">
+                    <label class="block font-bold">Construction - Cost ($ mm)</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" @input.debounce.500ms="autoSave(selectedItem)">
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Construction Details</label>
+                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">NOTES - NOAH</label>
+                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['NOTES - NOAH']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Target Dates - Start</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" @input.debounce.500ms="autoSave(selectedItem)">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Target Dates - Completion</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" @input.debounce.500ms="autoSave(selectedItem)">
+            </div>
+            <button class="mt-4 py-2 px-4 bg-gray-200 rounded" @click="copyAddress(selectedItem)" aria-label="Copy full address">Copy Full Address</button>
         </div>
     </div>
 
@@ -167,6 +165,7 @@
                     gray: '#6b7280'
                 },
                 supabase: null,
+                mapLoaded: false,
 
                 init() {
                     // Supabase setup
@@ -174,7 +173,16 @@
                     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoaWtxcGl3c3djeWZkcHZicGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5NjQ5OTEsImV4cCI6MjA3NjU0MDk5MX0.QMtrdl3DOJ6yUEXfZmhjKK12cCXXc6EJ35XldCTqyiw'; // Replace with your Supabase anon key
                     this.supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-                    // Map Setup
+                    this.$watch('searchQuery', () => this.updateFiltered());
+                    this.$watch('statusFilter', () => this.updateFiltered());
+                    this.$watch('currentPage', () => this.updatePaginated());
+
+                    // Auto-load
+                    this.loadFromLocalOrDefault();
+                },
+
+                initMap() {
+                    if (this.map) return;
                     this.map = L.map('map').setView([39.5, -98.35], 4);
                     L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
                         attribution: 'Map data © Google'
@@ -195,12 +203,8 @@
                         localStorage.setItem('dodge.mapview.v1', JSON.stringify({ center: [center.lat, center.lng], zoom }));
                     });
 
-                    this.$watch('searchQuery', () => this.updateFiltered());
-                    this.$watch('statusFilter', () => this.updateFiltered());
-                    this.$watch('currentPage', () => this.updatePaginated());
-
-                    // Auto-load
-                    this.loadFromLocalOrDefault();
+                    this.mapLoaded = true;
+                    this.updateMarkers();
                 },
 
                 async loadFromLocalOrDefault() {
@@ -304,6 +308,7 @@
                 },
 
                 updateMarkers() {
+                    if (!this.mapLoaded) return;
                     this.markerLayer.clearLayers();
                     this.markers = [];
                     const bounds = L.latLngBounds();
@@ -330,7 +335,7 @@
                     const compDate = Date.parse(compStr);
                     const hasStart = !isNaN(startDate);
                     const hasComp = !isNaN(compDate);
-                    const today = new Date('October 20, 2025');
+                    const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     const parsedComp = hasComp ? new Date(compDate) : null;
                     if (parsedComp) parsedComp.setHours(0, 0, 0, 0);
@@ -351,7 +356,7 @@
                     const compDate = Date.parse(compStr);
                     const hasStart = !isNaN(startDate);
                     const hasComp = !isNaN(compDate);
-                    const today = new Date('October 20, 2025');
+                    const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     const parsedComp = hasComp ? new Date(compDate) : null;
                     if (parsedComp) parsedComp.setHours(0, 0, 0, 0);
@@ -364,7 +369,7 @@
 
                 selectItem(item) {
                     this.selectedIndex = this.filteredData.indexOf(item);
-                    this.selectedItem = { ...item }; // Create a copy to avoid direct mutation
+                    this.selectedItem = { ...item };
                     const marker = this.markers[this.selectedIndex];
                     if (marker) {
                         this.map.panTo(marker.getLatLng(), { animate: true });
@@ -379,124 +384,50 @@
                 },
 
                 async addNewProject() {
-                    const newProject = {
-                        "Project Title": "",
-                        "Project Sub-title": "",
-                        "Primary Address": "",
-                        "Secondary Address": "",
-                        "City": "",
-                        "State": "",
-                        "Geocodes - Latitude": "39.5",
-                        "Geocodes - Longitude": "-98.35",
-                        "County - Name": "",
-                        "County - FIPS Code": "",
-                        "MSA": "",
-                        "MSA - Fips Code": "",
-                        "Region": "",
-                        "Market": "",
-                        "Submarkets - Multifamily": "",
-                        "Submarkets - Hotel": "",
-                        "Submarkets - Office": "",
-                        "Submarkets - Retail": "",
-                        "Submarkets - Warehouse": "",
-                        "Property Type - Primary": "",
-                        "Property Type - Previous": "",
-                        "Property Type - Sub-type": "",
-                        "Property Types Included - HTL": "",
-                        "Property Types Included - MFH": "",
-                        "Property Types Included - OFC": "",
-                        "Property Types Included - RTL": "",
-                        "Property Types Included - SRH": "",
-                        "Property Types Included - WHS": "",
-                        "Construction Types - NEW": "",
-                        "Construction Types - ALT": "",
-                        "Construction Types - ADD": "",
-                        "Construction Types - CVT": "",
-                        "Units": "",
-                        "Construction - Cost ($ mm)": "",
-                        "Sq. Ft. - (000's)": "",
-                        "Square Footage by Property Type (000's) - HTL": "",
-                        "BLANK": "",
-                        "Square Footage by Property Type (000's) - OFC": "",
-                        "Square Footage by Property Type (000's) - RTL": "",
-                        "Square Footage by Property Type (000's) - SRH": "",
-                        "Square Footage by Property Type (000's) - WHS": "",
-                        "BLANK 1": "",
-                        "BLANK 2": "",
-                        "Units by Unit Type - HTL": "",
-                        "Units by Unit Type - APT": "",
-                        "Units by Unit Type - SUB": "",
-                        "Units by Unit Type - TWN": "",
-                        "Units by Unit Type - TIM": "",
-                        "Units by Unit Type - ACT": "",
-                        "Units by Unit Type - SNR": "",
-                        "Units by Unit Type - INL": "",
-                        "Units by Unit Type - AST": "",
-                        "Units by Unit Type - ALZ": "",
-                        "Units by Unit Type - NRS": "",
-                        "Units by Unit Type - CCR": "",
-                        "Units by Unit Type - SSF": "",
-                        "Units by Unit Type - SNG": "",
-                        "# of Buildings": "",
-                        "# of Floors": "",
-                        "Parking Area": "",
-                        "Target Dates - Start": "",
-                        "Target Dates - Completion": "",
-                        "Target Dates - Opening": "",
-                        "Brands": "",
-                        "Public / Private": "",
-                        "Primary Owner - Name": "",
-                        "Primary Owner - Address": "",
-                        "Primary Owner - City": "",
-                        "Primary Owner - State": "",
-                        "Primary Owner - Zip Code": "",
-                        "Owner Contact - Name": "",
-                        "Owner Contact - Phone": "",
-                        "Owner Contact - Fax": "",
-                        "Primary Architect - Name": "",
-                        "Primary Architect - Address": "",
-                        "Primary Architect - City": "",
-                        "Primary Architect - State": "",
-                        "Primary Architect - Zip Code": "",
-                        "Architect Contact - Name": "",
-                        "Architect Contact - Phone": "",
-                        "Architect Contact - Fax": "",
-                        "REIT - Name": "",
-                        "REIT - Address": "",
-                        "REIT - City": "",
-                        "REIT - State": "",
-                        "REIT - Zip Code": "",
-                        "REIT - Phone": "",
-                        "REIT - Fax": "",
-                        "Updated - Date": "",
-                        "Updated - Status": "",
-                        "Notes": "",
-                        "Construction Details": "",
-                        "Pre-planning Phase - Date": "",
-                        "Pre-planning Phase - Notes": "",
-                        "Planning Phase - Date": "",
-                        "Planning Phase - Notes": "",
-                        "Final Planning Phase - Date": "",
-                        "Final Planning Phase - Notes": "",
-                        "Bidding Phase - Date": "",
-                        "Bidding Phase - Notes": "",
-                        "Start Phase - Date": "",
-                        "Start Phase - Notes": "",
-                        "Deferred Phase - Date": "",
-                        "Deferred Phase - Notes": "",
-                        "Abandoned Phase - Date": "",
-                        "Abandoned Phase - Notes": "",
-                        "NOTES - NOAH": ""
-                    };
+                    const newProject = {};
+                    const headers = [
+                        'Project Title', 'Project Sub-title', 'Primary Address', 'Secondary Address', 'City', 'State',
+                        'Geocodes - Latitude', 'Geocodes - Longitude', 'County - Name', 'County - FIPS Code', 'MSA',
+                        'MSA - Fips Code', 'Region', 'Market', 'Submarkets - Multifamily', 'Submarkets - Hotel',
+                        'Submarkets - Office', 'Submarkets - Retail', 'Submarkets - Warehouse', 'Property Type - Primary',
+                        'Property Type - Previous', 'Property Type - Sub-type', 'Property Types Included - HTL',
+                        'Property Types Included - MFH', 'Property Types Included - OFC', 'Property Types Included - RTL',
+                        'Property Types Included - SRH', 'Property Types Included - WHS', 'Construction Types - NEW',
+                        'Construction Types - ALT', 'Construction Types - ADD', 'Construction Types - CVT', 'Units',
+                        'Construction - Cost ($ mm)', 'Sq. Ft. - (000\'s)', 'Square Footage by Property Type (000\'s) - HTL',
+                        'BLANK', 'Square Footage by Property Type (000\'s) - OFC', 'Square Footage by Property Type (000\'s) - RTL',
+                        'Square Footage by Property Type (000\'s) - SRH', 'Square Footage by Property Type (000\'s) - WHS',
+                        'BLANK 1', 'BLANK 2', 'Units by Unit Type - HTL', 'Units by Unit Type - APT', 'Units by Unit Type - SUB',
+                        'Units by Unit Type - TWN', 'Units by Unit Type - TIM', 'Units by Unit Type - ACT',
+                        'Units by Unit Type - SNR', 'Units by Unit Type - INL', 'Units by Unit Type - AST',
+                        'Units by Unit Type - ALZ', 'Units by Unit Type - NRS', 'Units by Unit Type - CCR',
+                        'Units by Unit Type - SSF', 'Units by Unit Type - SNG', '# of Buildings', '# of Floors',
+                        'Parking Area', 'Target Dates - Start', 'Target Dates - Completion', 'Target Dates - Opening',
+                        'Brands', 'Public / Private', 'Primary Owner - Name', 'Primary Owner - Address',
+                        'Primary Owner - City', 'Primary Owner - State', 'Primary Owner - Zip Code', 'Owner Contact - Name',
+                        'Owner Contact - Phone', 'Owner Contact - Fax', 'Primary Architect - Name', 'Primary Architect - Address',
+                        'Primary Architect - City', 'Primary Architect - State', 'Primary Architect - Zip Code',
+                        'Architect Contact - Name', 'Architect Contact - Phone', 'Architect Contact - Fax', 'REIT - Name',
+                        'REIT - Address', 'REIT - City', 'REIT - State', 'REIT - Zip Code', 'REIT - Phone', 'REIT - Fax',
+                        'Updated - Date', 'Updated - Status', 'Notes', 'Construction Details', 'Pre-planning Phase - Date',
+                        'Pre-planning Phase - Notes', 'Planning Phase - Date', 'Planning Phase - Notes',
+                        'Final Planning Phase - Date', 'Final Planning Phase - Notes', 'Bidding Phase - Date',
+                        'Bidding Phase - Notes', 'Start Phase - Date', 'Start Phase - Notes', 'Deferred Phase - Date',
+                        'Deferred Phase - Notes', 'Abandoned Phase - Date', 'Abandoned Phase - Notes', 'NOTES - NOAH'
+                    ];
+                    headers.forEach(header => newProject[header] = '');
+                    newProject['Geocodes - Latitude'] = '39.5';
+                    newProject['Geocodes - Longitude'] = '-98.35';
                     try {
                         const { data, error } = await this.supabase.from('dodge').insert([newProject]).select();
                         if (error) throw error;
-                        const inserted = data[0] || newProject;
-                        inserted.lat = parseFloat(inserted['Geocodes - Latitude']);
-                        inserted.lon = parseFloat(inserted['Geocodes - Longitude']);
-                        this.data.push(inserted);
+                        const inserted = data[0];
+                        Object.assign(newProject, inserted);
+                        newProject.lat = parseFloat(newProject['Geocodes - Latitude']);
+                        newProject.lon = parseFloat(newProject['Geocodes - Longitude']);
+                        this.data.push(newProject);
                         this.updateFiltered();
-                        this.selectItem(inserted);
+                        this.selectItem(newProject);
                         this.persistData();
                     } catch (err) {
                         this.warningMessage = 'Error adding project: ' + err.message + '. Added locally.';
@@ -510,30 +441,23 @@
                 },
 
                 async autoSave(item) {
+                    // Update local data
+                    const index = this.data.findIndex(d => d.id === item.id);
+                    if (index !== -1) {
+                        this.data[index] = { ...item };
+                        this.persistData();
+                        this.updateFiltered();
+                    }
+
+                    // Auto-save to Supabase async
                     try {
                         const updates = { ...item };
                         delete updates.lat;
                         delete updates.lon;
-                        const { error } = await this.supabase
-                            .from('dodge')
-                            .update(updates)
-                            .eq('id', item['id']);
+                        const { error } = await this.supabase.from('dodge').update(updates).eq('id', item.id);
                         if (error) throw error;
-                        // Update local data
-                        const index = this.data.findIndex(d => d['id'] === item['id']);
-                        if (index !== -1) {
-                            this.data[index] = { ...updates, lat: item.lat, lon: item.lon };
-                            this.persistData();
-                            this.updateFiltered();
-                        }
                     } catch (err) {
-                        this.warningMessage = 'Error auto-saving: ' + err.message + '. Changes saved locally.';
-                        const index = this.data.findIndex(d => d['id'] === item['id']);
-                        if (index !== -1) {
-                            this.data[index] = { ...item };
-                            this.persistData();
-                            this.updateFiltered();
-                        }
+                        this.warningMessage = 'Error auto-saving to Supabase: ' + err.message + '. Changes saved locally.';
                     }
                 },
 
