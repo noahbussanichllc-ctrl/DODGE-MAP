@@ -196,8 +196,8 @@
                     this.$watch('statusFilter', () => this.updateFiltered());
                     this.$watch('currentPage', () => this.updatePaginated());
 
-                    // Auto-load
-                    this.loadFromLocalOrDefault();
+                    // Auto-load from Supabase
+                    this.fetchFromSupabase();
                 },
 
                 async loadFromLocalOrDefault() {
@@ -209,11 +209,12 @@
                     }
                 },
 
+                // Fetch data from Supabase
                 async fetchFromSupabase() {
                     this.errorMessage = '';
                     this.warningMessage = '';
                     try {
-                        const { data, error } = await this.supabase.from('DODGE REPORT').select('*').order('id', { ascending: true });
+                        const { data, error } = await this.supabase.from('dodge').select('*').order('id', { ascending: true });
                         if (error) throw error;
                         this.processData(data);
                         this.persistData();
@@ -227,6 +228,7 @@
                     await this.fetchFromSupabase();
                 },
 
+                // Process data
                 processData(rawData) {
                     const skipped = [];
                     const processed = rawData.filter(item => {
@@ -249,6 +251,7 @@
                     this.updateFiltered();
                 },
 
+                // LocalStorage caching
                 persistData() {
                     localStorage.setItem('dodge.report.v1', JSON.stringify(this.data));
                 },
@@ -259,6 +262,7 @@
                     this.fetchFromSupabase();
                 },
 
+                // Search & Filter
                 updateFiltered() {
                     let filtered = this.data;
                     if (this.searchQuery) {
@@ -285,6 +289,7 @@
                     this.paginatedData = this.filteredData.slice(start, start + this.pageSize);
                 },
 
+                // Pin Rendering
                 getIcon(color) {
                     if (!this.icons[color]) {
                         const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="25" height="41"><path fill="${color}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
@@ -316,6 +321,7 @@
                     }
                 },
 
+                // Color Logic
                 getColor(item) {
                     const subtype = (item['Property Type - Sub-type'] || '').toLowerCase();
                     if (subtype.includes('subsidized') || subtype.includes('mixed income')) return this.colors.pink;
@@ -358,6 +364,7 @@
                     return 'Other / Unknown';
                 },
 
+                // Edit & Save
                 selectItem(item) {
                     this.selectedIndex = this.filteredData.indexOf(item);
                     this.selectedItem = item;
@@ -410,7 +417,7 @@
                     newProject['Geocodes - Latitude'] = '39.5';
                     newProject['Geocodes - Longitude'] = '-98.35';
                     try {
-                        const { data, error } = await this.supabase.from('DODGE REPORT').insert([newProject]).select();
+                        const { data, error } = await this.supabase.from('dodge').insert([newProject]).select();
                         if (error) throw error;
                         const inserted = data[0];
                         Object.assign(newProject, inserted);
@@ -430,7 +437,7 @@
                         const updates = { ...item };
                         delete updates.lat;
                         delete updates.lon;
-                        const { error } = await this.supabase.from('DODGE REPORT').update(updates).eq('id', item.id);
+                        const { error } = await this.supabase.from('dodge').update(updates).eq('id', item.id);
                         if (error) throw error;
                         alert('Saved successfully');
                         this.persistData();
@@ -454,7 +461,34 @@
 
                 saveCsv() {
                     const csvHeaders = [
-                        'Project Title', 'Project Sub-title', 'Primary Address', 'Secondary Address', 'City', 'State', 'Geocodes - Latitude', 'Geocodes - Longitude', 'County - Name', 'County - FIPS Code', 'MSA', 'MSA - Fips Code', 'Region', 'Market', 'Submarkets - Multifamily', 'Submarkets - Hotel', 'Submarkets - Office', 'Submarkets - Retail', 'Submarkets - Warehouse', 'Property Type - Primary', 'Property Type - Previous', 'Property Type - Sub-type', 'Property Types Included - HTL', 'Property Types Included - MFH', 'Property Types Included - OFC', 'Property Types Included - RTL', 'Property Types Included - SRH', 'Property Types Included - WHS', 'Construction Types - NEW', 'Construction Types - ALT', 'Construction Types - ADD', 'Construction Types - CVT', 'Units', 'Construction - Cost ($ mm)', 'Sq. Ft. - (000\'s)', 'Square Footage by Property Type (000\'s) - HTL', 'Square Footage by Property Type (000\'s) - OFC', 'Square Footage by Property Type (000\'s) - RTL', 'Square Footage by Property Type (000\'s) - SRH', 'Square Footage by Property Type (000\'s) - WHS', 'Units by Unit Type - HTL', 'Units by Unit Type - APT', 'Units by Unit Type - SUB', 'Units by Unit Type - TWN', 'Units by Unit Type - TIM', 'Units by Unit Type - ACT', 'Units by Unit Type - SNR', 'Units by Unit Type - INL', 'Units by Unit Type - AST', 'Units by Unit Type - ALZ', 'Units by Unit Type - NRS', 'Units by Unit Type - CCR', 'Units by Unit Type - SSF', 'Units by Unit Type - SNG', '# of Buildings', '# of Floors', 'Parking Area', 'Target Dates - Start', 'Target Dates - Completion', 'Target Dates - Opening', 'Brands', 'Public / Private', 'Primary Owner - Name', 'Primary Owner - Address', 'Primary Owner - City', 'Primary Owner - State', 'Primary Owner - Zip Code', 'Owner Contact - Name', 'Owner Contact - Phone', 'Owner Contact - Fax', 'Primary Architect - Name', 'Primary Architect - Address', 'Primary Architect - City', 'Primary Architect - State', 'Primary Architect - Zip Code', 'Architect Contact - Name', 'Architect Contact - Phone', 'Architect Contact - Fax', 'REIT - Name', 'REIT - Address', 'REIT - City', 'REIT - State', 'REIT - Zip Code', 'REIT - Phone', 'REIT - Fax', 'Updated - Date', 'Updated - Status', 'Notes', 'Construction Details', 'Pre-planning Phase - Date', 'Pre-planning Phase - Notes', 'Planning Phase - Date', 'Planning Phase - Notes', 'Final Planning Phase - Date', 'Final Planning Phase - Notes', 'Bidding Phase - Date', 'Bidding Phase - Notes', 'Start Phase - Date', 'Start Phase - Notes', 'Deferred Phase - Date', 'Deferred Phase - Notes', 'Abandoned Phase - Date', 'Abandoned Phase - Notes', 'NOTES - NOAH'
+                        'Project Title', 'Project Sub-title', 'Primary Address', 'Secondary Address', 'City', 'State',
+                        'Geocodes - Latitude', 'Geocodes - Longitude', 'County - Name', 'County - FIPS Code', 'MSA',
+                        'MSA - Fips Code', 'Region', 'Market', 'Submarkets - Multifamily', 'Submarkets - Hotel',
+                        'Submarkets - Office', 'Submarkets - Retail', 'Submarkets - Warehouse', 'Property Type - Primary',
+                        'Property Type - Previous', 'Property Type - Sub-type', 'Property Types Included - HTL',
+                        'Property Types Included - MFH', 'Property Types Included - OFC', 'Property Types Included - RTL',
+                        'Property Types Included - SRH', 'Property Types Included - WHS', 'Construction Types - NEW',
+                        'Construction Types - ALT', 'Construction Types - ADD', 'Construction Types - CVT', 'Units',
+                        'Construction - Cost ($ mm)', 'Sq. Ft. - (000\'s)', 'Square Footage by Property Type (000\'s) - HTL',
+                        'Square Footage by Property Type (000\'s) - OFC', 'Square Footage by Property Type (000\'s) - RTL',
+                        'Square Footage by Property Type (000\'s) - SRH', 'Square Footage by Property Type (000\'s) - WHS',
+                        'Units by Unit Type - HTL', 'Units by Unit Type - APT', 'Units by Unit Type - SUB',
+                        'Units by Unit Type - TWN', 'Units by Unit Type - TIM', 'Units by Unit Type - ACT',
+                        'Units by Unit Type - SNR', 'Units by Unit Type - INL', 'Units by Unit Type - AST',
+                        'Units by Unit Type - ALZ', 'Units by Unit Type - NRS', 'Units by Unit Type - CCR',
+                        'Units by Unit Type - SSF', 'Units by Unit Type - SNG', '# of Buildings', '# of Floors',
+                        'Parking Area', 'Target Dates - Start', 'Target Dates - Completion', 'Target Dates - Opening',
+                        'Brands', 'Public / Private', 'Primary Owner - Name', 'Primary Owner - Address',
+                        'Primary Owner - City', 'Primary Owner - State', 'Primary Owner - Zip Code', 'Owner Contact - Name',
+                        'Owner Contact - Phone', 'Owner Contact - Fax', 'Primary Architect - Name', 'Primary Architect - Address',
+                        'Primary Architect - City', 'Primary Architect - State', 'Primary Architect - Zip Code',
+                        'Architect Contact - Name', 'Architect Contact - Phone', 'Architect Contact - Fax', 'REIT - Name',
+                        'REIT - Address', 'REIT - City', 'REIT - State', 'REIT - Zip Code', 'REIT - Phone', 'REIT - Fax',
+                        'Updated - Date', 'Updated - Status', 'Notes', 'Construction Details', 'Pre-planning Phase - Date',
+                        'Pre-planning Phase - Notes', 'Planning Phase - Date', 'Planning Phase - Notes',
+                        'Final Planning Phase - Date', 'Final Planning Phase - Notes', 'Bidding Phase - Date',
+                        'Bidding Phase - Notes', 'Start Phase - Date', 'Start Phase - Notes', 'Deferred Phase - Date',
+                        'Deferred Phase - Notes', 'Abandoned Phase - Date', 'Abandoned Phase - Notes', 'NOTES - NOAH'
                     ];
                     let csv = csvHeaders.join(',') + '\n';
                     this.data.forEach(item => {
