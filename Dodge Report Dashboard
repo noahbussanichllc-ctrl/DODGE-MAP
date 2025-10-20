@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dodge Report Dashboard</title>
+    <!-- Note: Tailwind CSS CDN is used for development. For production, install Tailwind via npm: https://tailwindcss.com/docs/installation -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body class="h-screen flex flex-col" x-data="app">
+    <!-- Top bar -->
+    <div class="bg-gray-100 p-4 flex flex-wrap items-center gap-4">
+        <button class="py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700" @click="reloadData">Reload Data</button>
+        <button class="py-2 px-4 bg-green-600 text-white rounded hover:bg-green-700" @click="saveCsv">Save CSV</button>
+        <button class="py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700" @click="addNewProject">Add Project</button>
+        <button class="py-2 px-4 bg-red-600 text-white rounded hover:bg-red-700" @click="clearChanges">Clear Changes</button>
+        <input type="text" placeholder="Search..." class="p-2 border rounded" x-model.debounce.500ms="searchQuery" aria-label="Search projects">
+        <select class="p-2 border rounded" x-model="statusFilter" aria-label="Filter by status">
+            <option value="All">All</option>
+            <option value="Completed">Completed</option>
+            <option value="Under Construction">Under Construction</option>
+            <option value="Pre-Planning">Pre-Planning</option>
+            <option value="Subsidized / Mixed Income">Subsidized / Mixed Income</option>
+            <option value="Other / Unknown">Other / Unknown</option>
+        </select>
+    </div>
+
+    <!-- Main content -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Left panel: Project List -->
+        <div class="w-1/4 overflow-y-auto border-r p-4">
+            <template x-if="data.length === 0">
+                <div class="flex items-center justify-center h-full text-gray-500">
+                    <div class="bg-white p-6 rounded shadow">Loading data...</div>
+                </div>
+            </template>
+            <template x-if="errorMessage">
+                <div class="bg-red-100 p-4 rounded mb-4" x-text="errorMessage"></div>
+            </template>
+            <template x-if="warningMessage">
+                <div class="bg-yellow-100 p-4 rounded mb-4 relative">
+                    <span x-text="warningMessage"></span>
+                    <button class="absolute top-0 right-0 p-2" @click="warningMessage = ''">&times;</button>
+                </div>
+            </template>
+            <table class="w-full table-auto" x-show="filteredData.length > 0">
+                <thead class="sticky top-0 bg-white">
+                    <tr>
+                        <th class="px-4 py-2">Project Title</th>
+                        <th class="px-4 py-2">City</th>
+                        <th class="px-4 py-2">Property Type - Sub-type</th>
+                        <th class="px-4 py-2">Target Dates - Start</th>
+                        <th class="px-4 py-2">Target Dates - Completion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(item, index) in paginatedData" :key="index">
+                        <tr class="cursor-pointer hover:bg-gray-100" :class="{ 'bg-blue-50': selectedIndex === filteredData.indexOf(item) }" @click="selectItem(item)">
+                            <td class="px-4 py-2" x-text="item['Project Title'] || 'N/A'"></td>
+                            <td class="px-4 py-2" x-text="item['City'] || 'N/A'"></td>
+                            <td class="px-4 py-2" x-text="item['Property Type - Sub-type'] || 'N/A'"></td>
+                            <td class="px-4 py-2" x-text="item['Target Dates - Start'] || 'N/A'"></td>
+                            <td class="px-4 py-2" x-text="item['Target Dates - Completion'] || 'N/A'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <div class="flex justify-between mt-4" x-show="filteredData.length > 0">
+                <button class="py-2 px-4 bg-gray-200 rounded" @click="currentPage--" :disabled="currentPage === 1">Prev</button>
+                <span x-text="'Page ' + currentPage + ' of ' + Math.ceil(filteredData.length / pageSize)"></span>
+                <button class="py-2 px-4 bg-gray-200 rounded" @click="currentPage++" :disabled="currentPage === Math.ceil(filteredData.length / pageSize)">Next</button>
+            </div>
+            <div x-show="filteredData.length === 0 && data.length > 0" class="text-center text-gray-500 mt-4">No results</div>
+        </div>
+
+        <!-- Center panel: Map -->
+        <div class="flex-1" id="map"></div>
+
+        <!-- Right panel: Details -->
+        <div class="w-1/4 overflow-y-auto border-l p-4" x-show="selectedItem">
+            <div class="mb-4">
+                <label class="block font-bold">Project Title</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" x-bind:disabled="!selectedItem">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Address</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" x-bind:disabled="!selectedItem">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">City</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" x-bind:disabled="!selectedItem">
+            </div>
+            <div class="mb-4 flex gap-4">
+                <div class="flex-1">
+                    <label class="block font-bold">Property Type - Sub-type</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" x-bind:disabled="!selectedItem">
+                </div>
+                <div class="flex-1">
+                    <label class="block font-bold">Units</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" x-bind:disabled="!selectedItem">
+                </div>
+                <div class="flex-1">
+                    <label class="block font-bold">Construction - Cost ($ mm)</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" x-bind:disabled="!selectedItem">
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Construction Details</label>
+                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" x-bind:disabled="!selectedItem"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">NOTES - NOAH</label>
+                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['NOTES - NOAH']" x-bind:disabled="!selectedItem"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Target Dates - Start</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" x-bind:disabled="!selectedItem">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Target Dates - Completion</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" x-bind:disabled="!selectedItem">
+            </div>
+            <button class="mt-4 py-2 px-4 bg-gray-200 rounded" @click="copyAddress(selectedItem)" aria-label="Copy full address" x-bind:disabled="!selectedItem">Copy Full Address</button>
+            <button class="ml-2 py-2 px-4 bg-blue-600 text-white rounded" @click="saveItem(selectedItem)" x-bind:disabled="!selectedItem">Save Changes</button>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="absolute bottom-4 left-1/4 bg-white p-4 rounded shadow z-[1000] flex gap-4">
+        <div class="flex items-center"><span class="w-4 h-4 bg-[#16a34a] mr-2"></span>Green – Completed</div>
+        <div class="flex items-center"><span class="w-4 h-4 bg-[#f97316] mr-2"></span>Orange – Under Construction</div>
+        <div class="flex items-center"><span class="w-4 h-4 bg-[#2563eb] mr-2"></span>Blue – Pre-Planning</div>
+        <div class="flex items-center"><span class="w-4 h-4 bg-[#ec4899] mr-2"></span>Pink – Subsidized / Mixed Income</div>
+        <div class="flex items-center"><span class="w-4 h-4 bg-[#6b7280] mr-2"></span>Gray – Unknown</div>
+    </div>
+
+    <script>
+        // Fallback CSV data (parsed from provided document)
+        const fallbackData = [
+            {
+                "id": "1",
+                "Project Title": "1055 Willamette Street Apartments",
+                "Project Sub-title": "(1) Retail Space and Parking on Grade Level\n(2) Existing Building Drawings",
+                "Primary Address": "1055 Willamette St",
+                "Secondary Address": "",
+                "City": "Eugene",
+                "State": "Oregon",
+                "Geocodes - Latitude": "44.0482",
+                "Geocodes - Longitude": "-123.09241",
+                "County - Name": "LANE, OR",
+                "County - FIPS Code": "41039",
+                "MSA": "Eugene-Springfield, OR",
+                "MSA - Fips Code": "21660",
+                "Region": "Pacific",
+                "Market": "n/a",
+                "Submarkets - Multifamily": "",
+                "Submarkets - Hotel": "",
+                "Submarkets - Office": "",
+                "Submarkets - Retail": "",
+                "Submarkets - Warehouse": "",
+                "Property Type - Primary": "Multifamily",
+                "Property Type - Previous": "School",
+                "Property Type - Sub-type": "Subsidized/Mixed income",
+                "Property Types Included - HTL": "",
+                "Property Types Included - MFH": "X",
+                "Property Types Included - OFC": "",
+                "Property Types Included - RTL": "X",
+                "Property Types Included - SRH": "",
+                "Property Types Included - WHS": "",
+                "Construction Types - NEW": "X",
+                "Construction Types - ALT": "",
+                "Construction Types - ADD": "",
+                "Construction Types - CVT": "X",
+                "Units": "133",
+                "Construction - Cost ($ mm)": "15",
+                "Sq. Ft. - (000's)": "94",
+                "Square Footage by Property Type (000's) - HTL": "",
+                "Square Footage by Property Type (000's) - OFC": "",
+                "Square Footage by Property Type (000's) - RTL": "",
+                "Square Footage by Property Type (000's) - SRH": "",
+                "Square Footage by Property Type (000's) - WHS": "",
+                "BLANK": "",
+                "BLANK 1": "",
+                "BLANK 2": "",
+                "Units by Unit Type - HTL": "",
+                "Units by Unit Type - APT": "",
+                "Units by Unit Type - SUB": "",
+                "Units by Unit Type - TWN": "",
+                "Units by Unit Type - TIM": "",
+                "Units by Unit Type - ACT": "",
+                "Units by Unit Type - SNR": "",
+                "Units by Unit Type - INL": "",
+                "Units by Unit Type - AST": "",
+                "Units by Unit Type - ALZ": "",
+                "Units by Unit Type - NRS": "",
+                "Units by Unit Type - CCR": "",
+                "Units by Unit Type - SSF": "",
+                "Units by Unit Type - SNG": "",
+                "# of Buildings": "1",
+                "# of Floors": "6",
+                "Parking Area": "",
+                "Target Dates - Start": "11/1/2024",
+                "Target Dates - Completion": "12/1/2025",
+                "Target Dates - Opening": "",
+                "Brands": "",
+                "Public / Private": "Private",
+                "Primary Owner - Name": "DeChase Miksis Development",
+                "Primary Owner - Address": "1249 WILLAMETTE ST STE 250",
+                "Primary Owner - City": "Eugene",
+                "Primary Owner - State": "OR",
+                "Primary Owner - Zip Code": "97401-3509",
+                "Owner Contact - Name": "",
+                "Owner Contact - Phone": "(541) 232-2508",
+                "Owner Contact - Fax": "",
+                "Primary Architect - Name": "Rowell Brokaw Architects, PC",
+                "Primary Architect - Address": "1203 WILLAMETTE ST STE 210",
+                "Primary Architect - City": "Eugene",
+                "Primary Architect - State": "OR",
+                "Primary Architect - Zip Code": "97401-5479",
+                "Architect Contact - Name": "",
+                "Architect Contact - Phone": "(541) 485-1003",
+                "Architect Contact - Fax": "(541) 485-1003",
+                "REIT - Name": "",
+                "REIT - Address": "",
+                "REIT - City": "",
+                "REIT - State": "",
+                "REIT - Zip Code": "",
+                "REIT - Phone": "",
+                "REIT - Fax": "",
+                "Updated - Date": "10/1/2024",
+                "Updated - Status": "Updated",
+                "Notes": "85% CDs complete- Design/Build demo/fire suppression/plumbing/HVAC/electrical previously let - Bids on all remaining trades in and under review - bid 10/18",
+                "Construction Details": "New 6-story, 133 Unit apartment building totaling approximately 93,740 GSF. The structure will consist of a post-tensioned concrete podium with 5 floors of wood framing above. Amenities include a main entry lobby, outdoor pet area, pet spa, and a 6th floor amenity room with exterior patio. First floor also includes future T.I. spaces and parking for 22 cars. Abatement of the Existing Structures is included as a part of this bid. Abatement and demolition are scheduled to start November.",
+                "Pre-planning Phase - Date": "5/1/2013",
+                "Pre-planning Phase - Notes": "Proposed for construction - Further action pending Owner's decision to proceed & local approvals - No firm schedule set",
+                "Planning Phase - Date": "n/a",
+                "Planning Phase - Notes": "",
+                "Final Planning Phase - Date": "n/a",
+                "Final Planning Phase - Notes": "",
+                "Bidding Phase - Date": "n/a",
+                "Bidding Phase - Notes": "",
+                "Start Phase - Date": "10/1/2024",
+                "Start Phase - Notes": "CM requests subtrade bids due Oct 18 at 2 PM PDT",
+                "Deferred Phase - Date": "12/1/2013",
+                "Deferred Phase - Notes": "Project delayed - No further action expected until Owner's decision to proceed - Construction schedule indefinite",
+                "Abandoned Phase - Date": "n/a",
+                "Abandoned Phase - Notes": "",
+                "NOTES - NOAH": ""
+            }
+            // Add more rows here if additional CSV data is provided
+        ];
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('app', () => ({
+                data: [],
+                filteredData: [],
+                paginatedData: [],
+                selectedItem: null,
+                selectedIndex: -1,
+                searchQuery: '',
+                statusFilter: 'All',
+                currentPage: 1,
+                pageSize: 50,
+                errorMessage: '',
+                warningMessage: '',
+                map: null,
+                markers: [],
+                markerLayer: null,
+                icons: {},
+                colors: {
+                    green: '#16a34a',
+                    orange: '#f97316',
+                    blue: '#2563eb',
+                    pink: '#ec4899',
+                    gray: '#6b7280'
+                },
+                supabase: null,
+
+                init() {
+                    // Supabase setup
+                    // Replace with your actual Supabase credentials from Settings > API
+                    const supabaseUrl = 'https://thikqpiwswcyfdpvbpai.supabase.co'; // e.g., https://your-project-id.supabase.co
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoaWtxcGl3c3djeWZkcHZicGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5NjQ5OTEsImV4cCI6MjA3NjU0MDk5MX0.QMtrdl3DOJ6yUEXfZmhjKK12cCXXc6EJ35XldCTqyiw'; // Your anon public key
+                    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('YOUR_SUPABASE_URL')) {
+                        this.errorMessage = 'Supabase configuration missing. Using fallback data.';
+                        this.processData(fallbackData);
+                        return;
+                    }
+                    this.supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+                    // Map Setup
+                    this.map = L.map('map').setView([39.5, -98.35], 4);
+                    L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                        attribution: 'Map data © Google'
+                    }).addTo(this.map);
+                    this.markerLayer = L.layerGroup().addTo(this.map);
+
+                    // Load remembered map view
+                    const savedView = localStorage.getItem('dodge.mapview.v1');
+                    if (savedView) {
+                        const { center, zoom } = JSON.parse(savedView);
+                        this.map.setView(center, zoom);
+                    }
+
+                    // Save map view on move
+                    this.map.on('moveend', () => {
+                        const center = this.map.getCenter();
+                        const zoom = this.map.getZoom();
+                        localStorage.setItem('dodge.mapview.v1', JSON.stringify({ center: [center.lat, center.lng], zoom }));
+                    });
+
+                    this.$watch('searchQuery', () => this.updateFiltered());
+                    this.$watch('statusFilter', () => this.updateFiltered());
+                    this.$watch('currentPage', () => this.updatePaginated());
+
+                    // Auto-load
+                    this.loadFromLocalOrDefault();
+                },
+
+                async loadFromLocalOrDefault() {
+                    const saved = localStorage.getItem('dodge.report.v1');
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                this.processData(parsed);
+                                return;
+                            }
+                        } catch (e) {
+                            this.warningMessage = 'Invalid local data. Fetching from Supabase.';
+                        }
+                    }
+                    await this.fetchFromSupabase();
+                },
+
+                async fetchFromSupabase() {
+                    this.errorMessage = '';
+                    this.warningMessage = '';
+                    try {
+                        const { data, error } = await this.supabase.from('dodge').select('*').order('id', { ascending: true });
+                        if (error) throw error;
+                        if (!data || data.length === 0) {
+                            this.errorMessage = 'No data found in Supabase. Using fallback data.';
+                            this.processData(fallbackData);
+                            return;
+                        }
+                        this.processData(data);
+                        this.persistData();
+                    } catch (err) {
+                        this.errorMessage = 'Error loading from Supabase: ' + err.message + '. Using fallback data.';
+                        this.processData(fallbackData);
+                    }
+                },
+
+                async reloadData() {
+                    localStorage.removeItem('dodge.report.v1');
+                    await this.fetchFromSupabase();
+                },
+
+                processData(rawData) {
+                    const skipped = [];
+                    const processed = rawData.filter(item => {
+                        if (!item) return false;
+                        Object.keys(item).forEach(key => {
+                            if (typeof item[key] === 'string') item[key] = item[key].trim();
+                        });
+                        item.lat = parseFloat(item['Geocodes - Latitude'] || 'NaN');
+                        item.lon = parseFloat(item['Geocodes - Longitude'] || 'NaN');
+                        if (isNaN(item.lat) || isNaN(item.lon)) {
+                            skipped.push(item['Project Title'] || 'Unnamed');
+                            return false;
+                        }
+                        return true;
+                    });
+                    this.data = processed;
+                    if (skipped.length) {
+                        this.warningMessage = 'Skipped rows without valid lat/lon: ' + skipped.join(', ');
+                    }
+                    this.updateFiltered();
+                },
+
+                persistData() {
+                    localStorage.setItem('dodge.report.v1', JSON.stringify(this.data));
+                },
+
+                clearChanges() {
+                    localStorage.removeItem('dodge.report.v1');
+                    localStorage.removeItem('dodge.mapview.v1');
+                    this.fetchFromSupabase();
+                },
+
+                updateFiltered() {
+                    let filtered = this.data;
+                    if (this.searchQuery) {
+                        const q = this.searchQuery.toLowerCase();
+                        filtered = filtered.filter(item => 
+                            (item['Project Title']?.toLowerCase().includes(q) ?? false) ||
+                            (item['Primary Address']?.toLowerCase().includes(q) ?? false) ||
+                            (item['City']?.toLowerCase().includes(q) ?? false) ||
+                            (item['State']?.toLowerCase().includes(q) ?? false) ||
+                            (item['Property Type - Sub-type']?.toLowerCase().includes(q) ?? false)
+                        );
+                    }
+                    if (this.statusFilter !== 'All') {
+                        filtered = filtered.filter(item => this.getStatus(item) === this.statusFilter);
+                    }
+                    this.filteredData = filtered;
+                    this.currentPage = 1;
+                    this.updatePaginated();
+                    this.updateMarkers();
+                },
+
+                updatePaginated() {
+                    const start = (this.currentPage - 1) * this.pageSize;
+                    this.paginatedData = this.filteredData.slice(start, start + this.pageSize);
+                },
+
+                getIcon(color) {
+                    if (!this.icons[color]) {
+                        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="25" height="41"><path fill="${color}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+                        const url = 'data:image/svg+xml;base64,' + btoa(svg);
+                        this.icons[color] = L.icon({
+                            iconUrl: url,
+                            iconSize: [25, 41],
+                            iconAnchor: [12.5, 41],
+                            tooltipAnchor: [16, -28]
+                        });
+                    }
+                    return this.icons[color];
+                },
+
+                updateMarkers() {
+                    this.markerLayer.clearLayers();
+                    this.markers = [];
+                    const bounds = L.latLngBounds();
+                    this.filteredData.forEach(item => {
+                        const color = this.getColor(item);
+                        const marker = L.marker([item.lat, item.lon], { icon: this.getIcon(color) }).bindTooltip(item['Project Title'] || 'N/A');
+                        marker.on('click', () => this.selectItem(item));
+                        this.markerLayer.addLayer(marker);
+                        this.markers.push(marker);
+                        bounds.extend([item.lat, item.lon]);
+                    });
+                    if (this.filteredData.length) {
+                        this.map.fitBounds(bounds, { padding: [50, 50] });
+                    }
+                },
+
+                getColor(item) {
+                    const subtype = (item['Property Type - Sub-type'] || '').toLowerCase();
+                    if (subtype.includes('subsidized') || subtype.includes('mixed income')) return this.colors.pink;
+
+                    const startStr = item['Target Dates - Start'] || '';
+                    const compStr = item['Target Dates - Completion'] || '';
+                    const startDate = Date.parse(startStr);
+                    const compDate = Date.parse(compStr);
+                    const hasStart = !isNaN(startDate);
+                    const hasComp = !isNaN(compDate);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const parsedComp = hasComp ? new Date(compDate) : null;
+                    if (parsedComp) parsedComp.setHours(0, 0, 0, 0);
+
+                    if (hasStart && hasComp && parsedComp < today) return this.colors.green;
+                    if (hasStart && hasComp && parsedComp > today) return this.colors.orange;
+                    if (!hasStart) return this.colors.blue;
+                    return this.colors.gray;
+                },
+
+                getStatus(item) {
+                    const subtype = (item['Property Type - Sub-type'] || '').toLowerCase();
+                    if (subtype.includes('subsidized') || subtype.includes('mixed income')) return 'Subsidized / Mixed Income';
+
+                    const startStr = item['Target Dates - Start'] || '';
+                    const compStr = item['Target Dates - Completion'] || '';
+                    const startDate = Date.parse(startStr);
+                    const compDate = Date.parse(compStr);
+                    const hasStart = !isNaN(startDate);
+                    const hasComp = !isNaN(compDate);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const parsedComp = hasComp ? new Date(compDate) : null;
+                    if (parsedComp) parsedComp.setHours(0, 0, 0, 0);
+
+                    if (hasStart && hasComp && parsedComp < today) return 'Completed';
+                    if (hasStart && hasComp && parsedComp > today) return 'Under Construction';
+                    if (!hasStart) return 'Pre-Planning';
+                    return 'Other / Unknown';
+                },
+
+                selectItem(item) {
+                    this.selectedIndex = this.filteredData.indexOf(item);
+                    this.selectedItem = { ...item }; // Create a copy to avoid direct mutation
+                    const marker = this.markers[this.selectedIndex];
+                    if (marker) {
+                        this.map.panTo(marker.getLatLng(), { animate: true });
+                        if (this.map.getZoom() < 14) this.map.setZoom(14);
+                    }
+                },
+
+                updateLatLon(item) {
+                    item.lat = parseFloat(item['Geocodes - Latitude'] || 'NaN');
+                    item.lon = parseFloat(item['Geocodes - Longitude'] || 'NaN');
+                    this.updateMarkers();
+                },
+
+                async addNewProject() {
+                    const newProject = {
+                        "id": null, // Supabase will auto-generate the id
+                        "Project Title": "New Project",
+                        "Project Sub-title": "",
+                        "Primary Address": "",
+                        "Secondary Address": "",
+                        "City": "",
+                        "State": "",
+                        "Geocodes - Latitude": "39.5",
+                        "Geocodes - Longitude": "-98.35",
+                        "County - Name": "",
+                        "County - FIPS Code": "",
+                        "MSA": "",
+                        "MSA - Fips Code": "",
+                        "Region": "",
+                        "Market": "",
+                        "Submarkets - Multifamily": "",
+                        "Submarkets - Hotel": "",
+                        "Submarkets - Office": "",
+                        "Submarkets - Retail": "",
+                        "Submarkets - Warehouse": "",
+                        "Property Type - Primary": "",
+                        "Property Type - Previous": "",
+                        "Property Type - Sub-type": "",
+                        "Property Types Included - HTL": "",
+                        "Property Types Included - MFH": "",
+                        "Property Types Included - OFC": "",
+                        "Property Types Included - RTL": "",
+                        "Property Types Included - SRH": "",
+                        "Property Types Included - WHS": "",
+                        "Construction Types - NEW": "",
+                        "Construction Types - ALT": "",
+                        "Construction Types - ADD": "",
+                        "Construction Types - CVT": "",
+                        "Units": "",
+                        "Construction - Cost ($ mm)": "",
+                        "Sq. Ft. - (000's)": "",
+                        "Square Footage by Property Type (000's) - HTL": "",
+                        "BLANK": "",
+                        "Square Footage by Property Type (000's) - OFC": "",
+                        "Square Footage by Property Type (000's) - RTL": "",
+                        "Square Footage by Property Type (000's) - SRH": "",
+                        "Square Footage by Property Type (000's) - WHS": "",
+                        "BLANK 1": "",
+                        "BLANK 2": "",
+                        "Units by Unit Type - HTL": "",
+                        "Units by Unit Type - APT": "",
+                        "Units by Unit Type - SUB": "",
+                        "Units by Unit Type - TWN": "",
+                        "Units by Unit Type - TIM": "",
+                        "Units by Unit Type - ACT": "",
+                        "Units by Unit Type - SNR": "",
+                        "Units by Unit Type - INL": "",
+                        "Units by Unit Type - AST": "",
+                        "Units by Unit Type - ALZ": "",
+                        "Units by Unit Type - NRS": "",
+                        "Units by Unit Type - CCR": "",
+                        "Units by Unit Type - SSF": "",
+                        "Units by Unit Type - SNG": "",
+                        "# of Buildings": "",
+                        "# of Floors": "",
+                        "Parking Area": "",
+                        "Target Dates - Start": "",
+                        "Target Dates - Completion": "",
+                        "Target Dates - Opening": "",
+                        "Brands": "",
+                        "Public / Private": "",
+                        "Primary Owner - Name": "",
+                        "Primary Owner - Address": "",
+                        "Primary Owner - City": "",
+                        "Primary Owner - State": "",
+                        "Primary Owner - Zip Code": "",
+                        "Owner Contact - Name": "",
+                        "Owner Contact - Phone": "",
+                        "Owner Contact - Fax": "",
+                        "Primary Architect - Name": "",
+                        "Primary Architect - Address": "",
+                        "Primary Architect - City": "",
+                        "Primary Architect - State": "",
+                        "Primary Architect - Zip Code": "",
+                        "Architect Contact - Name": "",
+                        "Architect Contact - Phone": "",
+                        "Architect Contact - Fax": "",
+                        "REIT - Name": "",
+                        "REIT - Address": "",
+                        "REIT - City": "",
+                        "REIT - State": "",
+                        "REIT - Zip Code": "",
+                        "REIT - Phone": "",
+                        "REIT - Fax": "",
+                        "Updated - Date": "",
+                        "Updated - Status": "",
+                        "Notes": "",
+                        "Construction Details": "",
+                        "Pre-planning Phase - Date": "",
+                        "Pre-planning Phase - Notes": "",
+                        "Planning Phase - Date": "",
+                        "Planning Phase - Notes": "",
+                        "Final Planning Phase - Date": "",
+                        "Final Planning Phase - Notes": "",
+                        "Bidding Phase - Date": "",
+                        "Bidding Phase - Notes": "",
+                        "Start Phase - Date": "",
+                        "Start Phase - Notes": "",
+                        "Deferred Phase - Date": "",
+                        "Deferred Phase - Notes": "",
+                        "Abandoned Phase - Date": "",
+                        "Abandoned Phase - Notes": "",
+                        "NOTES - NOAH": ""
+                    };
+                    try {
+                        const { data, error } = await this.supabase.from('dodge').insert([newProject]).select();
+                        if (error) throw error;
+                        const inserted = data[0] || newProject;
+                        inserted.lat = parseFloat(inserted['Geocodes - Latitude'] || 'NaN');
+                        inserted.lon = parseFloat(inserted['Geocodes - Longitude'] || 'NaN');
+                        this.data.push(inserted);
+                        this.updateFiltered();
+                        this.selectItem(inserted);
+                        this.persistData();
+                    } catch (err) {
+                        this.warningMessage = 'Error adding project: ' + err.message + '. Added locally.';
+                        newProject.lat = parseFloat(newProject['Geocodes - Latitude'] || 'NaN');
+                        newProject.lon = parseFloat(newProject['Geocodes - Longitude'] || 'NaN');
+                        this.data.push(newProject);
+                        this.updateFiltered();
+                        this.selectItem(newProject);
+                        this.persistData();
+                    }
+                },
+
+                async saveItem(item) {
+                    try {
+                        const updates = { ...item };
+                        delete updates.lat;
+                        delete updates.lon;
+                        const { error } = await this.supabase
+                            .from('dodge')
+                            .update(updates)
+                            .eq('id', item['id']);
+                        if (error) throw error;
+                        alert('Saved successfully');
+                        this.persistData();
+                        this.updateFiltered();
+                    } catch (err) {
+                        alert('Error saving: ' + err.message);
+                    }
+                },
+
+                copyAddress(item) {
+                    const addr = [
+                        item['Primary Address'],
+                        item['City']
+                    ].filter(Boolean).join(', ');
+                    navigator.clipboard.writeText(addr).then(() => {
+                        alert('Address copied!');
+                    }).catch(err => {
+                        console.error('Failed to copy: ', err);
+                    });
+                },
+
+                saveCsv() {
+                    const csvHeaders = [
+                        'id', 'Project Title', 'Project Sub-title', 'Primary Address', 'Secondary Address', 'City', 'State',
+                        'Geocodes - Latitude', 'Geocodes - Longitude', 'County - Name', 'County - FIPS Code', 'MSA',
+                        'MSA - Fips Code', 'Region', 'Market', 'Submarkets - Multifamily', 'Submarkets - Hotel',
+                        'Submarkets - Office', 'Submarkets - Retail', 'Submarkets - Warehouse', 'Property Type - Primary',
+                        'Property Type - Previous', 'Property Type - Sub-type', 'Property Types Included - HTL',
+                        'Property Types Included - MFH', 'Property Types Included - OFC', 'Property Types Included - RTL',
+                        'Property Types Included - SRH', 'Property Types Included - WHS', 'Construction Types - NEW',
+                        'Construction Types - ALT', 'Construction Types - ADD', 'Construction Types - CVT', 'Units',
+                        'Construction - Cost ($ mm)', 'Sq. Ft. - (000\'s)', 'Square Footage by Property Type (000\'s) - HTL',
+                        'BLANK', 'Square Footage by Property Type (000\'s) - OFC', 'Square Footage by Property Type (000\'s) - RTL',
+                        'Square Footage by Property Type (000\'s) - SRH', 'Square Footage by Property Type (000\'s) - WHS',
+                        'BLANK 1', 'BLANK 2', 'Units by Unit Type - HTL', 'Units by Unit Type - APT', 'Units by Unit Type - SUB',
+                        'Units by Unit Type - TWN', 'Units by Unit Type - TIM', 'Units by Unit Type - ACT',
+                        'Units by Unit Type - SNR', 'Units by Unit Type - INL', 'Units by Unit Type - AST',
+                        'Units by Unit Type - ALZ', 'Units by Unit Type - NRS', 'Units by Unit Type - CCR',
+                        'Units by Unit Type - SSF', 'Units by Unit Type - SNG', '# of Buildings', '# of Floors',
+                        'Parking Area', 'Target Dates - Start', 'Target Dates - Completion', 'Target Dates - Opening',
+                        'Brands', 'Public / Private', 'Primary Owner - Name', 'Primary Owner - Address',
+                        'Primary Owner - City', 'Primary Owner - State', 'Primary Owner - Zip Code', 'Owner Contact - Name',
+                        'Owner Contact - Phone', 'Owner Contact - Fax', 'Primary Architect - Name', 'Primary Architect - Address',
+                        'Primary Architect - City', 'Primary Architect - State', 'Primary Architect - Zip Code',
+                        'Architect Contact - Name', 'Architect Contact - Phone', 'Architect Contact - Fax', 'REIT - Name',
+                        'REIT - Address', 'REIT - City', 'REIT - State', 'REIT - Zip Code', 'REIT - Phone', 'REIT - Fax',
+                        'Updated - Date', 'Updated - Status', 'Notes', 'Construction Details', 'Pre-planning Phase - Date',
+                        'Pre-planning Phase - Notes', 'Planning Phase - Date', 'Planning Phase - Notes',
+                        'Final Planning Phase - Date', 'Final Planning Phase - Notes', 'Bidding Phase - Date',
+                        'Bidding Phase - Notes', 'Start Phase - Date', 'Start Phase - Notes', 'Deferred Phase - Date',
+                        'Deferred Phase - Notes', 'Abandoned Phase - Date', 'Abandoned Phase - Notes', 'NOTES - NOAH'
+                    ];
+                    let csv = csvHeaders.join(',') + '\n';
+                    this.data.forEach(item => {
+                        csv += csvHeaders.map(header => `"${(item[header] || '').toString().replace(/"/g, '""')}"`).join(',') + '\n';
+                    });
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    saveAs(blob, 'DODGE REPORT - edited.csv');
+                }
+            }));
+        });
+    </script>
+</body>
+</html>
