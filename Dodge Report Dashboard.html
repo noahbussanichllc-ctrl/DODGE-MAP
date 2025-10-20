@@ -1,4 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dodge Report Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body class="h-screen flex flex-col" x-data="app">
+    <!-- Top bar -->
+    <div class="bg-gray-100 p-4 flex flex-wrap items-center gap-4">
+        <button class="py-2 px-4 bg-blue-600 text-white rounded hover:bg-blue-700" @click="reloadData">Reload Data</button>
+        <button class="py-2 px-4 bg-green-600 text-white rounded hover:bg-green-700" @click="saveCsv">Save CSV</button>
+        <button class="py-2 px-4 bg-purple-600 text-white rounded hover:bg-purple-700" @click="addNewProject">Add Project</button>
+        <button class="py-2 px-4 bg-red-600 text-white rounded hover:bg-red-700" @click="clearChanges">Clear Changes</button>
+        <input type="text" placeholder="Search..." class="p-2 border rounded" x-model.debounce.500ms="searchQuery" aria-label="Search projects">
+        <select class="p-2 border rounded" x-model="statusFilter" aria-label="Filter by status">
+            <option value="All">All</option>
+            <option value="Completed">Completed</option>
+            <option value="Under Construction">Under Construction</option>
+            <option value="Pre-Planning">Pre-Planning</option>
+            <option value="Subsidized / Mixed Income">Subsidized / Mixed Income</option>
+            <option value="Other / Unknown">Other / Unknown</option>
+        </select>
+    </div>
 
+    <!-- Main content -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Left panel: Project List -->
+        <div class="w-1/4 overflow-y-auto border-r p-4">
+            <template x-if="data.length === 0">
+                <div class="flex items-center justify-center h-full text-gray-500">
+                    <div class="bg-white p-6 rounded shadow">Loading data...</div>
+                </div>
+            </template>
+            <template x-if="errorMessage">
+                <div class="bg-red-100 p-4 rounded mb-4" x-text="errorMessage"></div>
+            </template>
+            <template x-if="warningMessage">
+                <div class="bg-yellow-100 p-4 rounded mb-4 relative">
+                    <span x-text="warningMessage"></span>
+                    <button class="absolute top-0 right-0 p-2" @click="warningMessage = ''">&times;</button>
+                </div>
+            </template>
+            <table class="w-full table-auto" x-show="filteredData.length > 0">
+                <thead class="sticky top-0 bg-white">
+                    <tr>
+                        <th class="px-4 py-2">Project Title</th>
+                        <th class="px-4 py-2">City</th>
+                        <th class="px-4 py-2">Property Type - Sub-type</th>
+                        <th class="px-4 py-2">Target Dates - Start</th>
+                        <th class="px-4 py-2">Target Dates - Completion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(item, index) in paginatedData" :key="index">
+                        <tr class="cursor-pointer hover:bg-gray-100" :class="{ 'bg-blue-50': selectedIndex === filteredData.indexOf(item) }" @click="selectItem(item)">
+                            <td class="px-4 py-2" x-text="item['Project Title']"></td>
+                            <td class="px-4 py-2" x-text="item['City']"></td>
+                            <td class="px-4 py-2" x-text="item['Property Type - Sub-type']"></td>
+                            <td class="px-4 py-2" x-text="item['Target Dates - Start']"></td>
+                            <td class="px-4 py-2" x-text="item['Target Dates - Completion']"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <div class="flex justify-between mt-4" x-show="filteredData.length > 0">
+                <button class="py-2 px-4 bg-gray-200 rounded" @click="currentPage--" :disabled="currentPage === 1">Prev</button>
+                <span x-text="'Page ' + currentPage + ' of ' + Math.ceil(filteredData.length / pageSize)"></span>
+                <button class="py-2 px-4 bg-gray-200 rounded" @click="currentPage++" :disabled="currentPage === Math.ceil(filteredData.length / pageSize)">Next</button>
+            </div>
+            <div x-show="filteredData.length === 0 && data.length > 0" class="text-center text-gray-500 mt-4">No results</div>
+        </div>
+
+        <!-- Center panel: Map -->
+        <div class="flex-1 relative" x-init="initMap">
+            <div id="map" class="h-full"></div>
+        </div>
+
+        <!-- Right panel: Details -->
+        <div class="w-1/4 overflow-y-auto border-l p-4" x-show="selectedItem">
+            <div class="mb-4">
+                <label class="block font-bold">Project Title</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" @input.debounce.500ms="autoSave">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">Address</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" @input.debounce.500ms="autoSave">
+            </div>
+            <div class="mb-4">
+                <label class="block font-bold">City</label>
+                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" @input.debounce.500ms="autoSave">
+            </div>
+            <div class="mb-4 flex gap-4">
+                <div class="flex-1">
+                    <label class="block font-bold">Property Type - Sub-type</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" @input.debounce.500ms="autoSave">
+                </div>
+                <div class="flex-1">
+                    <label class="block font-bold">Units</label>
+                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" @input.debounce.500ms="autoSave">
                 </div>
                 <div class="flex-1">
                     <label class="block font-bold">Construction - Cost ($ mm)</label>
