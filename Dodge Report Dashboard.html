@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dodge Report Dashboard</title>
-    <!-- Note: Tailwind CSS CDN is used for development. For production, install Tailwind via npm: https://tailwindcss.com/docs/installation -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -83,50 +82,53 @@
 
         <!-- Right panel: Details -->
         <div class="w-1/4 overflow-y-auto border-l p-4" x-show="selectedItem">
-            <div class="mb-4">
-                <label class="block font-bold">Project Title</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" x-bind:disabled="!selectedItem">
-            </div>
-            <div class="mb-4">
-                <label class="block font-bold">Address</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" x-bind:disabled="!selectedItem">
-            </div>
-            <div class="mb-4">
-                <label class="block font-bold">City</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" x-bind:disabled="!selectedItem">
-            </div>
-            <div class="mb-4 flex gap-4">
-                <div class="flex-1">
-                    <label class="block font-bold">Property Type - Sub-type</label>
-                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" x-bind:disabled="!selectedItem">
+            <template x-if="selectedItem">
+                <div>
+                    <div class="mb-4">
+                        <label class="block font-bold">Project Title</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Project Title']" @input.debounce.500ms="autoSave(selectedItem)">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block font-bold">Address</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Primary Address']" @input.debounce.500ms="autoSave(selectedItem)">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block font-bold">City</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['City']" @input.debounce.500ms="autoSave(selectedItem)">
+                    </div>
+                    <div class="mb-4 flex gap-4">
+                        <div class="flex-1">
+                            <label class="block font-bold">Property Type - Sub-type</label>
+                            <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Property Type - Sub-type']" @input.debounce.500ms="autoSave(selectedItem)">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block font-bold">Units</label>
+                            <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" @input.debounce.500ms="autoSave(selectedItem)">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block font-bold">Construction - Cost ($ mm)</label>
+                            <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" @input.debounce.500ms="autoSave(selectedItem)">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block font-bold">Construction Details</label>
+                        <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block font-bold">NOTES - NOAH</label>
+                        <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['NOTES - NOAH']" @input.debounce.500ms="autoSave(selectedItem)"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block font-bold">Target Dates - Start</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" @input.debounce.500ms="autoSave(selectedItem)">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block font-bold">Target Dates - Completion</label>
+                        <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" @input.debounce.500ms="autoSave(selectedItem)">
+                    </div>
+                    <button class="mt-4 py-2 px-4 bg-gray-200 rounded" @click="copyAddress(selectedItem)" aria-label="Copy full address">Copy Full Address</button>
                 </div>
-                <div class="flex-1">
-                    <label class="block font-bold">Units</label>
-                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Units']" x-bind:disabled="!selectedItem">
-                </div>
-                <div class="flex-1">
-                    <label class="block font-bold">Construction - Cost ($ mm)</label>
-                    <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Construction - Cost ($ mm)']" x-bind:disabled="!selectedItem">
-                </div>
-            </div>
-            <div class="mb-4">
-                <label class="block font-bold">Construction Details</label>
-                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['Construction Details']" x-bind:disabled="!selectedItem"></textarea>
-            </div>
-            <div class="mb-4">
-                <label class="block font-bold">NOTES - NOAH</label>
-                <textarea class="w-full p-2 border rounded" rows="4" x-model="selectedItem['NOTES - NOAH']" x-bind:disabled="!selectedItem"></textarea>
-            </div>
-            <div class="mb-4">
-                <label class="block font-bold">Target Dates - Start</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Start']" x-bind:disabled="!selectedItem">
-            </div>
-            <div class="mb-4">
-                <label class="block font-bold">Target Dates - Completion</label>
-                <input type="text" class="w-full p-2 border rounded" x-model="selectedItem['Target Dates - Completion']" x-bind:disabled="!selectedItem">
-            </div>
-            <button class="mt-4 py-2 px-4 bg-gray-200 rounded" @click="copyAddress(selectedItem)" aria-label="Copy full address" x-bind:disabled="!selectedItem">Copy Full Address</button>
-            <button class="ml-2 py-2 px-4 bg-blue-600 text-white rounded" @click="saveItem(selectedItem)" x-bind:disabled="!selectedItem">Save Changes</button>
+            </template>
         </div>
     </div>
 
@@ -140,121 +142,6 @@
     </div>
 
     <script>
-        // Fallback CSV data (parsed from provided document)
-        const fallbackData = [
-            {
-                "id": "1",
-                "Project Title": "1055 Willamette Street Apartments",
-                "Project Sub-title": "(1) Retail Space and Parking on Grade Level\n(2) Existing Building Drawings",
-                "Primary Address": "1055 Willamette St",
-                "Secondary Address": "",
-                "City": "Eugene",
-                "State": "Oregon",
-                "Geocodes - Latitude": "44.0482",
-                "Geocodes - Longitude": "-123.09241",
-                "County - Name": "LANE, OR",
-                "County - FIPS Code": "41039",
-                "MSA": "Eugene-Springfield, OR",
-                "MSA - Fips Code": "21660",
-                "Region": "Pacific",
-                "Market": "n/a",
-                "Submarkets - Multifamily": "",
-                "Submarkets - Hotel": "",
-                "Submarkets - Office": "",
-                "Submarkets - Retail": "",
-                "Submarkets - Warehouse": "",
-                "Property Type - Primary": "Multifamily",
-                "Property Type - Previous": "School",
-                "Property Type - Sub-type": "Subsidized/Mixed income",
-                "Property Types Included - HTL": "",
-                "Property Types Included - MFH": "X",
-                "Property Types Included - OFC": "",
-                "Property Types Included - RTL": "X",
-                "Property Types Included - SRH": "",
-                "Property Types Included - WHS": "",
-                "Construction Types - NEW": "X",
-                "Construction Types - ALT": "",
-                "Construction Types - ADD": "",
-                "Construction Types - CVT": "X",
-                "Units": "133",
-                "Construction - Cost ($ mm)": "15",
-                "Sq. Ft. - (000's)": "94",
-                "Square Footage by Property Type (000's) - HTL": "",
-                "Square Footage by Property Type (000's) - OFC": "",
-                "Square Footage by Property Type (000's) - RTL": "",
-                "Square Footage by Property Type (000's) - SRH": "",
-                "Square Footage by Property Type (000's) - WHS": "",
-                "BLANK": "",
-                "BLANK 1": "",
-                "BLANK 2": "",
-                "Units by Unit Type - HTL": "",
-                "Units by Unit Type - APT": "",
-                "Units by Unit Type - SUB": "",
-                "Units by Unit Type - TWN": "",
-                "Units by Unit Type - TIM": "",
-                "Units by Unit Type - ACT": "",
-                "Units by Unit Type - SNR": "",
-                "Units by Unit Type - INL": "",
-                "Units by Unit Type - AST": "",
-                "Units by Unit Type - ALZ": "",
-                "Units by Unit Type - NRS": "",
-                "Units by Unit Type - CCR": "",
-                "Units by Unit Type - SSF": "",
-                "Units by Unit Type - SNG": "",
-                "# of Buildings": "1",
-                "# of Floors": "6",
-                "Parking Area": "",
-                "Target Dates - Start": "11/1/2024",
-                "Target Dates - Completion": "12/1/2025",
-                "Target Dates - Opening": "",
-                "Brands": "",
-                "Public / Private": "Private",
-                "Primary Owner - Name": "DeChase Miksis Development",
-                "Primary Owner - Address": "1249 WILLAMETTE ST STE 250",
-                "Primary Owner - City": "Eugene",
-                "Primary Owner - State": "OR",
-                "Primary Owner - Zip Code": "97401-3509",
-                "Owner Contact - Name": "",
-                "Owner Contact - Phone": "(541) 232-2508",
-                "Owner Contact - Fax": "",
-                "Primary Architect - Name": "Rowell Brokaw Architects, PC",
-                "Primary Architect - Address": "1203 WILLAMETTE ST STE 210",
-                "Primary Architect - City": "Eugene",
-                "Primary Architect - State": "OR",
-                "Primary Architect - Zip Code": "97401-5479",
-                "Architect Contact - Name": "",
-                "Architect Contact - Phone": "(541) 485-1003",
-                "Architect Contact - Fax": "(541) 485-1003",
-                "REIT - Name": "",
-                "REIT - Address": "",
-                "REIT - City": "",
-                "REIT - State": "",
-                "REIT - Zip Code": "",
-                "REIT - Phone": "",
-                "REIT - Fax": "",
-                "Updated - Date": "10/1/2024",
-                "Updated - Status": "Updated",
-                "Notes": "85% CDs complete- Design/Build demo/fire suppression/plumbing/HVAC/electrical previously let - Bids on all remaining trades in and under review - bid 10/18",
-                "Construction Details": "New 6-story, 133 Unit apartment building totaling approximately 93,740 GSF. The structure will consist of a post-tensioned concrete podium with 5 floors of wood framing above. Amenities include a main entry lobby, outdoor pet area, pet spa, and a 6th floor amenity room with exterior patio. First floor also includes future T.I. spaces and parking for 22 cars. Abatement of the Existing Structures is included as a part of this bid. Abatement and demolition are scheduled to start November.",
-                "Pre-planning Phase - Date": "5/1/2013",
-                "Pre-planning Phase - Notes": "Proposed for construction - Further action pending Owner's decision to proceed & local approvals - No firm schedule set",
-                "Planning Phase - Date": "n/a",
-                "Planning Phase - Notes": "",
-                "Final Planning Phase - Date": "n/a",
-                "Final Planning Phase - Notes": "",
-                "Bidding Phase - Date": "n/a",
-                "Bidding Phase - Notes": "",
-                "Start Phase - Date": "10/1/2024",
-                "Start Phase - Notes": "CM requests subtrade bids due Oct 18 at 2 PM PDT",
-                "Deferred Phase - Date": "12/1/2013",
-                "Deferred Phase - Notes": "Project delayed - No further action expected until Owner's decision to proceed - Construction schedule indefinite",
-                "Abandoned Phase - Date": "n/a",
-                "Abandoned Phase - Notes": "",
-                "NOTES - NOAH": ""
-            }
-            // Add more rows here if additional CSV data is provided
-        ];
-
         document.addEventListener('alpine:init', () => {
             Alpine.data('app', () => ({
                 data: [],
@@ -283,14 +170,8 @@
 
                 init() {
                     // Supabase setup
-                    // Replace with your actual Supabase credentials from Settings > API
-                    const supabaseUrl = 'https://thikqpiwswcyfdpvbpai.supabase.co'; // e.g., https://your-project-id.supabase.co
-                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoaWtxcGl3c3djeWZkcHZicGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5NjQ5OTEsImV4cCI6MjA3NjU0MDk5MX0.QMtrdl3DOJ6yUEXfZmhjKK12cCXXc6EJ35XldCTqyiw'; // Your anon public key
-                    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('YOUR_SUPABASE_URL')) {
-                        this.errorMessage = 'Supabase configuration missing. Using fallback data.';
-                        this.processData(fallbackData);
-                        return;
-                    }
+                    const supabaseUrl = 'https://thikqpiwswcyfdpvbpai.supabase.co'; // Replace with your Supabase URL
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoaWtxcGl3c3djeWZkcHZicGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5NjQ5OTEsImV4cCI6MjA3NjU0MDk5MX0.QMtrdl3DOJ6yUEXfZmhjKK12cCXXc6EJ35XldCTqyiw'; // Replace with your Supabase anon key
                     this.supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
                     // Map Setup
@@ -325,17 +206,10 @@
                 async loadFromLocalOrDefault() {
                     const saved = localStorage.getItem('dodge.report.v1');
                     if (saved) {
-                        try {
-                            const parsed = JSON.parse(saved);
-                            if (Array.isArray(parsed) && parsed.length > 0) {
-                                this.processData(parsed);
-                                return;
-                            }
-                        } catch (e) {
-                            this.warningMessage = 'Invalid local data. Fetching from Supabase.';
-                        }
+                        this.processData(JSON.parse(saved));
+                    } else {
+                        await this.fetchFromSupabase();
                     }
-                    await this.fetchFromSupabase();
                 },
 
                 async fetchFromSupabase() {
@@ -344,11 +218,6 @@
                     try {
                         const { data, error } = await this.supabase.from('dodge').select('*').order('id', { ascending: true });
                         if (error) throw error;
-                        if (!data || data.length === 0) {
-                            this.errorMessage = 'No data found in Supabase. Using fallback data.';
-                            this.processData(fallbackData);
-                            return;
-                        }
                         this.processData(data);
                         this.persistData();
                     } catch (err) {
@@ -369,8 +238,8 @@
                         Object.keys(item).forEach(key => {
                             if (typeof item[key] === 'string') item[key] = item[key].trim();
                         });
-                        item.lat = parseFloat(item['Geocodes - Latitude'] || 'NaN');
-                        item.lon = parseFloat(item['Geocodes - Longitude'] || 'NaN');
+                        item.lat = parseFloat(item['Geocodes - Latitude']);
+                        item.lon = parseFloat(item['Geocodes - Longitude']);
                         if (isNaN(item.lat) || isNaN(item.lon)) {
                             skipped.push(item['Project Title'] || 'Unnamed');
                             return false;
@@ -440,7 +309,7 @@
                     const bounds = L.latLngBounds();
                     this.filteredData.forEach(item => {
                         const color = this.getColor(item);
-                        const marker = L.marker([item.lat, item.lon], { icon: this.getIcon(color) }).bindTooltip(item['Project Title'] || 'N/A');
+                        const marker = L.marker([item.lat, item.lon], { icon: this.getIcon(color) }).bindTooltip(item['Project Title'] || '');
                         marker.on('click', () => this.selectItem(item));
                         this.markerLayer.addLayer(marker);
                         this.markers.push(marker);
@@ -461,7 +330,7 @@
                     const compDate = Date.parse(compStr);
                     const hasStart = !isNaN(startDate);
                     const hasComp = !isNaN(compDate);
-                    const today = new Date();
+                    const today = new Date('October 20, 2025');
                     today.setHours(0, 0, 0, 0);
                     const parsedComp = hasComp ? new Date(compDate) : null;
                     if (parsedComp) parsedComp.setHours(0, 0, 0, 0);
@@ -482,7 +351,7 @@
                     const compDate = Date.parse(compStr);
                     const hasStart = !isNaN(startDate);
                     const hasComp = !isNaN(compDate);
-                    const today = new Date();
+                    const today = new Date('October 20, 2025');
                     today.setHours(0, 0, 0, 0);
                     const parsedComp = hasComp ? new Date(compDate) : null;
                     if (parsedComp) parsedComp.setHours(0, 0, 0, 0);
@@ -504,15 +373,14 @@
                 },
 
                 updateLatLon(item) {
-                    item.lat = parseFloat(item['Geocodes - Latitude'] || 'NaN');
-                    item.lon = parseFloat(item['Geocodes - Longitude'] || 'NaN');
+                    item.lat = parseFloat(item['Geocodes - Latitude']);
+                    item.lon = parseFloat(item['Geocodes - Longitude']);
                     this.updateMarkers();
                 },
 
                 async addNewProject() {
                     const newProject = {
-                        "id": null, // Supabase will auto-generate the id
-                        "Project Title": "New Project",
+                        "Project Title": "",
                         "Project Sub-title": "",
                         "Primary Address": "",
                         "Secondary Address": "",
@@ -624,16 +492,16 @@
                         const { data, error } = await this.supabase.from('dodge').insert([newProject]).select();
                         if (error) throw error;
                         const inserted = data[0] || newProject;
-                        inserted.lat = parseFloat(inserted['Geocodes - Latitude'] || 'NaN');
-                        inserted.lon = parseFloat(inserted['Geocodes - Longitude'] || 'NaN');
+                        inserted.lat = parseFloat(inserted['Geocodes - Latitude']);
+                        inserted.lon = parseFloat(inserted['Geocodes - Longitude']);
                         this.data.push(inserted);
                         this.updateFiltered();
                         this.selectItem(inserted);
                         this.persistData();
                     } catch (err) {
                         this.warningMessage = 'Error adding project: ' + err.message + '. Added locally.';
-                        newProject.lat = parseFloat(newProject['Geocodes - Latitude'] || 'NaN');
-                        newProject.lon = parseFloat(newProject['Geocodes - Longitude'] || 'NaN');
+                        newProject.lat = parseFloat(newProject['Geocodes - Latitude']);
+                        newProject.lon = parseFloat(newProject['Geocodes - Longitude']);
                         this.data.push(newProject);
                         this.updateFiltered();
                         this.selectItem(newProject);
@@ -641,7 +509,7 @@
                     }
                 },
 
-                async saveItem(item) {
+                async autoSave(item) {
                     try {
                         const updates = { ...item };
                         delete updates.lat;
@@ -651,11 +519,21 @@
                             .update(updates)
                             .eq('id', item['id']);
                         if (error) throw error;
-                        alert('Saved successfully');
-                        this.persistData();
-                        this.updateFiltered();
+                        // Update local data
+                        const index = this.data.findIndex(d => d['id'] === item['id']);
+                        if (index !== -1) {
+                            this.data[index] = { ...updates, lat: item.lat, lon: item.lon };
+                            this.persistData();
+                            this.updateFiltered();
+                        }
                     } catch (err) {
-                        alert('Error saving: ' + err.message);
+                        this.warningMessage = 'Error auto-saving: ' + err.message + '. Changes saved locally.';
+                        const index = this.data.findIndex(d => d['id'] === item['id']);
+                        if (index !== -1) {
+                            this.data[index] = { ...item };
+                            this.persistData();
+                            this.updateFiltered();
+                        }
                     }
                 },
 
